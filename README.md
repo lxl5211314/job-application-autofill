@@ -6,6 +6,7 @@
 - **零 LLM**（v1.0）：全部基于确定性词表与正则规则，AI 能力为 v1.1 预留（FR-028）
 - **安全兜底**：提交按钮、密码框、文件上传、协议勾选、验证码永不自动触碰（S8 / FR-018）
 - Spec 驱动开发：[`specs/001-job-application-autofill/`](./specs/001-job-application-autofill/)
+- **上手操作手册：[docs/usage.md（如何使用插件）](./docs/usage.md)**
 
 ---
 
@@ -13,7 +14,7 @@
 
 - [功能特性](#功能特性)
 - [快速开始](#快速开始)
-- [使用指南](#使用指南)
+- [使用指南 → docs/usage.md](./docs/usage.md)（安装/建档/一键填写/确认面板/记忆/控件对照/故障排查）
 - [架构设计](#架构设计)
 - [简历导入与坏字形修复](#简历导入与坏字形修复)
 - [隐私与安全](#隐私与安全)
@@ -133,7 +134,9 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ---
 
-## 使用指南
+## 使用指南（速览）
+
+> 完整操作手册（安装/建档/填写/确认面板/记忆机制/控件对照/故障排查）见 **[docs/usage.md](./docs/usage.md)**。
 
 ### 首次使用
 
@@ -334,6 +337,7 @@ scripts/
   postbuild-fix.mjs        # 修复 Parcel `_` 前缀文件名
   copy-pdf-worker.mjs      # postinstall 复制 pdf.js worker
 specs/                     # spec-kit 规格（spec/data-model/contracts/tasks/quickstart）
+docs/usage.md              # 使用指南（安装/建档/填写/确认/记忆/排查）
 tests/unit/                # Vitest 单测（112 项）
 tests/fixtures/            # 合成夹具（HTML 表单页、PDF/txt 简历）
 ```
