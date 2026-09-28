@@ -1,0 +1,43 @@
+{
+  "name": "job-application-autofill",
+  "displayName": "校招海投助手",
+  "description": "网申表格自动填写插件：本地个人资料库 + 一键填写 + 确认面板 + 字段记忆（零外发，spec FR-024/028）",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "postbuild": "node scripts/postbuild-fix.mjs",
+    "package": "plasmo package --zip",
+    "postinstall": "node scripts/copy-pdf-worker.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.8.69",
+    "plasmo": "^0.90.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.12.0",
+    "@types/chrome": "^0.0.280",
+    "@types/node": "^20.16.11",
+    "eslint": "^9.12.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jsdom": "^25.0.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.10.0",
+    "vitest": "^2.1.3"
+  },
+  "manifest": {
+    "permissions": ["storage", "activeTab"],
+    "web_accessible_resources": [
+      {
+        "resources": ["resources/pdf.worker.mjs"],
+        "matches": ["http://*/*", "https://*/*"]
+      }
+    ]
+  }
+}

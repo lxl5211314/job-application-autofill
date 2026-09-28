@@ -1,0 +1,47 @@
+{
+  "profile": {
+    "schemaVersion": 1,
+    "basics": {
+      "basic.name": { "value": "张三", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "basic.phone": { "value": "13812345678", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "basic.email": { "value": "zhangsan@example.com", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "basic.school": { "value": "清华大学", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "basic.major": { "value": "计算机科学与技术", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "basic.degree": { "value": "本科", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "basic.political_status": { "value": "中共党员", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 }
+    },
+    "intent": {
+      "intent.position": { "value": "后端开发工程师", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "intent.city": { "value": "北京", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 },
+      "intent.salary": { "value": "15-20K", "state": "confirmed", "source": "manual", "updatedAt": 1758900000000 }
+    }
+  },
+  "entries": [
+    {
+      "id": "edu-1",
+      "kind": "education",
+      "order": 0,
+      "title": "清华大学",
+      "subtitle": "计算机科学与技术",
+      "start": "2020.09",
+      "end": "2024.06",
+      "description": "GPA 3.7/4.0，专业排名前 5%",
+      "state": "confirmed",
+      "source": "manual",
+      "updatedAt": 1758900000000
+    },
+    {
+      "id": "intern-1",
+      "kind": "internship",
+      "order": 0,
+      "title": "字节跳动",
+      "subtitle": "后端开发实习生",
+      "start": "2023.06",
+      "end": "2023.12",
+      "description": "负责订单服务性能优化，接口 P99 下降 40%",
+      "state": "confirmed",
+      "source": "manual",
+      "updatedAt": 1758900000000
+    }
+  ]
+}

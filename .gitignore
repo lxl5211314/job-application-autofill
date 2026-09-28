@@ -1,0 +1,17 @@
+node_modules/
+build/
+.plasmo/
+dist/
+coverage/
+*.log
+.env
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+resources/pdf.worker.mjs
+
+tests/.e2e-profile/

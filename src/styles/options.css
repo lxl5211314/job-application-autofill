@@ -1,0 +1,208 @@
+/* T005: options 资料管理页原生样式 */
+:root {
+  --color-primary: #1e40af;
+  --color-primary-hover: #1d4ed8;
+  --color-text: #1f2937;
+  --color-muted: #6b7280;
+  --color-border: #e5e7eb;
+  --color-danger: #b91c1c;
+  --color-ok: #15803d;
+  --color-warn: #b45309;
+  --color-bg: #f3f4f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.options-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.options-nav {
+  width: 180px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid var(--color-border);
+  padding: 16px 0;
+}
+
+.options-nav h1 {
+  margin: 0 16px 12px;
+  font-size: 16px;
+}
+
+.options-nav button {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.options-nav button:hover {
+  background: #f3f4f6;
+}
+
+.options-nav button.active {
+  background: #eff6ff;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.options-main {
+  flex: 1;
+  padding: 24px;
+  max-width: 960px;
+}
+
+.options-main h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  max-width: 480px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.field .hint {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.field .error {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+.field.invalid input,
+.field.invalid select,
+.field.invalid textarea {
+  border-color: var(--color-danger);
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #f3f4f6;
+  color: var(--color-muted);
+}
+
+.badge.needs_review {
+  background: #fef3c7;
+  color: var(--color-warn);
+}
+
+.badge.confirmed {
+  background: #dcfce7;
+  color: var(--color-ok);
+}
+
+.section-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.entry-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 0;
+}
+
+.entry-row:last-child {
+  border-bottom: none;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 7px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f9fafb;
+}
+
+button.primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--color-primary-hover);
+}
+
+button.danger {
+  color: var(--color-danger);
+  border-color: #fecaca;
+}
+
+.save-status {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--color-ok);
+}
+
+.save-status.error {
+  color: var(--color-danger);
+}
+
+.progress {
+  color: var(--color-muted);
+  font-size: 13px;
+}

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>样例网申页（S1/S8：完整字段 + 安全边界控件）</title>
+</head>
+<body>
+  <h1>XX 科技 2026 届校园招聘网申</h1>
+
+  <h2>基本信息</h2>
+  <form id="app-form">
+    <p><label for="name">姓名</label><input id="name" name="fullname" type="text" /></p>
+    <p><label for="phone">手机号码</label><input id="phone" name="mobile" type="tel" /></p>
+    <p><label for="email">邮箱</label><input id="email" name="email" type="email" /></p>
+
+    <!-- 排除项：联系人姓名不应命中 basic.name -->
+    <p><label for="contact_name">联系人姓名</label><input id="contact_name" name="contact_name" type="text" /></p>
+
+    <p><label for="school">毕业院校</label><input id="school" name="school" type="text" /></p>
+    <p><label for="major">所学专业</label><input id="major" name="major" type="text" /></p>
+
+    <p>
+      <label for="degree">最高学历</label>
+      <select id="degree" name="degree">
+        <option value="">请选择</option>
+        <option value="college">大学专科</option>
+        <option value="bachelor">大学本科</option>
+        <option value="master">硕士研究生</option>
+        <option value="doctor">博士研究生</option>
+      </select>
+    </p>
+
+    <fieldset>
+      <legend>政治面貌</legend>
+      <label><input type="radio" name="political" value="中共党员" />中共党员</label>
+      <label><input type="radio" name="political" value="共青团员" />共青团员</label>
+      <label><input type="radio" name="political" value="群众" />群众</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>求职意向</legend>
+      <p><label for="position">应聘岗位</label><input id="position" name="position" type="text" /></p>
+      <p><label for="city">意向城市</label><input id="city" name="city" type="text" /></p>
+      <p><label for="salary">期望薪资</label><input id="salary" name="salary" type="text" /></p>
+    </fieldset>
+
+    <!-- S8 预填冲突：页面已有内容 ≠ 资料库 → 不覆盖，进确认 -->
+    <p><label for="contact_phone">联系电话</label><input id="contact_phone" name="contact_phone" type="tel" value="010-12345678" /></p>
+
+    <!-- 歧义字段：低置信 → 确认面板 -->
+    <p><label for="selfeval">自我评价</label><textarea id="selfeval" name="selfeval"></textarea></p>
+
+    <p><label for="unknown_hobby">兴趣爱好</label><input id="unknown_hobby" name="hobby" type="text" /></p>
+
+    <!-- S8 安全边界：密码/上传/验证码/条款/提交 → 一律 manual_required -->
+    <p><label for="pwd">登录密码</label><input id="pwd" name="password" type="password" /></p>
+    <p><label for="resume_file">上传简历</label><input id="resume_file" name="resume_file" type="file" /></p>
+    <p><label for="captcha">验证码</label><input id="captcha" name="captcha" type="text" /></p>
+    <p><label><input type="checkbox" id="agree" name="agree" />我已阅读并同意《求职者隐私政策》</label></p>
+    <p><button type="submit" id="btn-submit">提交简历</button></p>
+  </form>
+
+  <h2>教育经历</h2>
+  <table id="edu-table">
+    <thead>
+      <tr>
+        <th>学校名称</th>
+        <th>专业</th>
+        <th>学历</th>
+        <th>入学时间</th>
+        <th>毕业时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><input name="edu1_school" type="text" /></td>
+        <td><input name="edu1_major" type="text" /></td>
+        <td>
+          <select name="edu1_degree">
+            <option value="">请选择</option>
+            <option value="bachelor">大学本科</option>
+            <option value="master">硕士研究生</option>
+          </select>
+        </td>
+        <td><input name="edu1_start" type="text" /></td>
+        <td><input name="edu1_end" type="text" /></td>
+      </tr>
+      <tr>
+        <!-- 资料库仅 1 条教育经历 → 第 2 行 missing_in_profile -->
+        <td><input name="edu2_school" type="text" /></td>
+        <td><input name="edu2_major" type="text" /></td>
+        <td>
+          <select name="edu2_degree">
+            <option value="">请选择</option>
+            <option value="bachelor">大学本科</option>
+          </select>
+        </td>
+        <td><input name="edu2_start" type="text" /></td>
+        <td><input name="edu2_end" type="text" /></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>实习经历</h2>
+  <table id="intern-table">
+    <thead>
+      <tr>
+        <th>公司名称</th>
+        <th>岗位</th>
+        <th>工作内容</th>
+        <th>开始时间</th>
+        <th>结束时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><input name="intern1_company" type="text" /></td>
+        <td><input name="intern1_role" type="text" /></td>
+        <td><textarea name="intern1_work"></textarea></td>
+        <td><input name="intern1_start" type="text" /></td>
+        <td><input name="intern1_end" type="text" /></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

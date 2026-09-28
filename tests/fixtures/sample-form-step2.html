@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>样例网申页第二步（FR-016 动态补扫 + S2 学历措辞不一致）</title>
+</head>
+<body>
+  <h1>应聘登记表 · 第二步</h1>
+
+  <!-- S2：选项措辞与资料库不一致 → 不自动填，进确认面板 -->
+  <p>
+    <label for="degree_step2">学历要求</label>
+    <select id="degree_step2" name="degree_step2">
+      <option value="">请选择</option>
+      <option value="a">本科及以上（含专升本）</option>
+      <option value="b">研究生及以上（硕/博）</option>
+    </select>
+  </p>
+
+  <div id="late-fields"></div>
+
+  <script>
+    // FR-016：脚本动态追加字段（一键填写后 1 秒内出现 → 应被补扫）
+    setTimeout(function () {
+      var wrap = document.getElementById("late-fields")
+      wrap.innerHTML =
+        '<p><label for="late_phone">手机号码</label><input id="late_phone" name="late_phone" type="tel" /></p>'
+    }, 1000)
+  </script>
+</body>
+</html>

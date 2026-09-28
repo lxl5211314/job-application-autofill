@@ -1,0 +1,184 @@
+/* T005: 页内面板（Shadow DOM 内）通用样式：结果清单 + 确认面板 */
+:host {
+  all: initial;
+}
+
+.panel-root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483645;
+  width: 340px;
+  max-height: 70vh;
+  overflow: auto;
+  background: #fff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.panel-root h3 {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-root h3 .close {
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0 4px;
+}
+
+.panel-section {
+  padding: 8px 14px;
+}
+
+.panel-section + .panel-section {
+  border-top: 1px solid #f3f4f6;
+}
+
+.panel-group-title {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 8px 0 4px;
+  text-transform: none;
+}
+
+.panel-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  word-break: break-all;
+}
+
+.panel-item .label {
+  color: #1f2937;
+}
+
+.panel-item .value {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.status-chip {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.status-chip.filled {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-chip.needs_confirm {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.status-chip.not_found,
+.status-chip.missing_in_profile {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-chip.manual_required {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.confirm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.confirm-options button {
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.confirm-options button:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.confirm-custom {
+  display: flex;
+  gap: 6px;
+}
+
+.confirm-custom input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.confirm-custom button {
+  padding: 6px 12px;
+  border: 1px solid #1e40af;
+  border-radius: 6px;
+  background: #1e40af;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.confirm-actions button {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.confirm-actions button.primary {
+  background: #1e40af;
+  border-color: #1e40af;
+  color: #fff;
+}
+
+.ambiguous-note {
+  color: #b45309;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.remember-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+  color: #1e40af;
+}

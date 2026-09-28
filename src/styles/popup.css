@@ -1,0 +1,76 @@
+/* T005: popup 原生样式 */
+:root {
+  --color-primary: #1e40af;
+  --color-primary-hover: #1d4ed8;
+  --color-text: #1f2937;
+  --color-muted: #6b7280;
+  --color-border: #e5e7eb;
+  --color-danger: #b91c1c;
+  --color-ok: #15803d;
+  --color-warn: #b45309;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 300px;
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.popup {
+  padding: 14px;
+}
+
+.popup h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.popup .status {
+  margin: 8px 0 12px;
+  color: var(--color-muted);
+  min-height: 18px;
+}
+
+.popup .status.error {
+  color: var(--color-danger);
+}
+
+.popup .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+button {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f9fafb;
+}
+
+button.primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--color-primary-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

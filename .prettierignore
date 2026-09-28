@@ -1,0 +1,7 @@
+node_modules/
+build/
+.plasmo/
+resources/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
