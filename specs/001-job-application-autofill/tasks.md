@@ -180,6 +180,7 @@
 - [x] T054 [P] Developer docs in `README.md`: `npm run dev/build`、加载已解压扩展步骤、夹具与验收指引（指向 `specs/001-job-application-autofill/quickstart.md`）
 - [x] T055 Real-resume hardening in `src/core/resume/extract.ts` + `tests/unit/resume-exotic.test.ts`: 归一化剔除控制字符/全角空格/长破折号、康熙部首与兼容字形归一、无「姓名：」标签的首行姓名回退、日期残骸走无日期条目回退
 - [x] T056 Broken-ToUnicode digit repair in `src/core/resume/pdf.ts`: `getTextContent` 发现 NUL → 关归一化重取 + `getOperatorList()` 锁步对齐（合成空格不消费字形，desync 必须为 0），数字按 `digit = cid - base` 还原（base 由坏字形 cid 跨度推导，候选按合法日期数打分），对齐失败/cid 越界/无合法日期整页回退原文本（宁缺勿错）；夹具 `tests/fixtures/resume-broken.pdf` + `resume.test.ts` 回归
+- [x] T057 Readonly-field reporting in `src/core/matching/scan.ts` + `match.ts`: 新增 `scanReadonlyFields`（FR-019 不变——`scanDocument` 仍排除只读，不参与填写），`buildFillPlan` 对匹配到资料字段的只读控件上报 `manual`（reason=「只读控件（需在页面弹层中选择）」），匹配不上的不上报；签名加 `|ro` 后缀防撞——避免只读弹层控件静默消失被误报成「未找到」（`matching.test.ts` T057 块）
 
 ---
 

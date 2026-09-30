@@ -85,7 +85,7 @@
 | `type=password` / `type=file` | 扫描阶段直接过滤 |
 | 协议勾选（《隐私政策》等） | 标记需人工 |
 | 验证码区域 | 标记需人工 |
-| readonly / disabled / 不可见控件 | 不进入扫描结果（FR-019） |
+| readonly / disabled / 不可见控件 | 不自动填写（FR-019）；只读且能识别出资料字段名的归「需人工」并标注（T057） |
 
 ---
 
@@ -104,7 +104,7 @@ npm install          # postinstall 自动复制 pdf.js worker → resources/pdf.
 npm run dev          # 开发构建（热更新）→ build/chrome-mv3-dev
 npm run build        # 生产构建 → build/chrome-mv3-prod
 npm run package      # 打包 zip → build/chrome-mv3-prod.zip
-npm test             # Vitest 单元测试（jsdom，112 项）
+npm test             # Vitest 单元测试（jsdom，116 项）
 npm run test:watch   # 监听模式
 npm run lint         # ESLint（含 scripts/*.mjs）
 npx tsc --noEmit     # TypeScript 严格类型检查
@@ -200,7 +200,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ### 匹配管线（`src/core/matching/`）
 
-1. **scan.ts** —— 枚举可填写控件；抽取 label（`label[for]` → `aria-label` → `placeholder` → 表格列头）、区块标题、选项集；黑名单判定；过滤 readonly/disabled/隐藏
+1. **scan.ts** —— 枚举可填写控件；抽取 label（`label[for]` → `aria-label` → `placeholder` → 表格列头）、区块标题、选项集；黑名单判定；过滤 readonly/disabled/隐藏。另由 `scanReadonlyFields` 单独收集只读控件（T057：匹配到资料字段则归「需人工」，不静默丢弃）
 2. **signature.ts** —— `norm(label) + controlKind + norm(name/id/placeholder) + 选项指纹` 生成稳定签名
 3. **vocabulary.ts** —— 中英别名词表（10 个标量字段）、经历区块信号、非填写区黑名单、歧义标签
 4. **match.ts** —— 打分定档：
@@ -250,7 +250,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ## 测试与验收
 
-### 单元测试（Vitest，112 项 / 9 文件）
+### 单元测试（Vitest，116 项 / 9 文件）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -338,7 +338,7 @@ scripts/
   copy-pdf-worker.mjs      # postinstall 复制 pdf.js worker
 specs/                     # spec-kit 规格（spec/data-model/contracts/tasks/quickstart）
 docs/usage.md              # 使用指南（安装/建档/填写/确认/记忆/排查）
-tests/unit/                # Vitest 单测（112 项）
+tests/unit/                # Vitest 单测（116 项）
 tests/fixtures/            # 合成夹具（HTML 表单页、PDF/txt 简历）
 ```
 

@@ -12,7 +12,7 @@ import type {
   Profile
 } from "../core/model/types"
 import { buildFillPlan, planReportLabel, type FillPlanItem } from "../core/matching/match"
-import { scanDocument, type ScannedField } from "../core/matching/scan"
+import { scanDocument, scanReadonlyFields, type ScannedField } from "../core/matching/scan"
 import { sendToBackground, ok, type Request, type Response } from "../core/messaging"
 import { showConfirmPanel } from "../core/ui/confirm-panel"
 import { renderResultPanel } from "../core/ui/result-panel"
@@ -157,7 +157,7 @@ function newFieldsOnly(fields: ScannedField[]): ScannedField[] {
 }
 
 async function rescanRound(session: ActiveSession): Promise<void> {
-  const fresh = newFieldsOnly(scanDocument(document))
+  const fresh = newFieldsOnly([...scanDocument(document), ...scanReadonlyFields(document)])
   if (fresh.length === 0) return
   markProcessed(fresh)
 
@@ -244,7 +244,7 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
   if (!profileRes.ok) throw new Error(profileRes.error.message)
   const { entries, ...profile } = profileRes.data
 
-  const scanned = scanDocument(document)
+  const scanned = [...scanDocument(document), ...scanReadonlyFields(document)]
   markProcessed(scanned)
 
   const session: ActiveSession = {

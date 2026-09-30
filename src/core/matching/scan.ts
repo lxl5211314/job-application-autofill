@@ -8,7 +8,7 @@ import {
 } from "./vocabulary"
 import { fieldSignature } from "./signature"
 
-export type ManualReason = "password" | "file" | "submit" | "captcha" | "agreement"
+export type ManualReason = "password" | "file" | "submit" | "captcha" | "agreement" | "readonly"
 
 export interface ScannedField {
   element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement
@@ -310,5 +310,44 @@ export function scanDocument(doc: Document = document): ScannedField[] {
     processed.add(el)
   }
 
+  return results
+}
+
+/**
+ * T057：只读控件扫描——不参与自动填写（FR-019 仍由 scanDocument 保证），
+ * 但会上报为 manual="readonly"；buildFillPlan 仅在能匹配到资料字段时归入
+ * 「需人工」，避免只读弹层控件（日期选择器/学校下拉等）静默消失、全被误报成「未找到」。
+ */
+export function scanReadonlyFields(doc: Document = document): ScannedField[] {
+  const results: ScannedField[] = []
+  const controls = Array.from(doc.querySelectorAll("input, select, textarea")) as AnyControl[]
+  for (const el of controls) {
+    if (el.closest('[id^="job-autofill-"]')) continue
+    if (isHidden(el) || isDisabled(el)) continue
+    if (!isReadonly(el)) continue
+    const type = ((el as HTMLInputElement).type ?? "").toLowerCase()
+    if (type === "hidden" || type === "radio") continue
+
+    const { labelText, columnLabel, cellRowIndex } = labelSources(el, doc)
+    // 密码/上传/验证码/协议等黑名单控件保持原有语义，不重复上报
+    if (detectManual(el, labelText)) continue
+
+    const kind = controlKindOf(el)
+    const field = makeField({
+      element: el,
+      controlKind: kind,
+      labelText,
+      nameIdPlaceholder: nameIdOf(el),
+      blockTitle: findBlockTitle(el, doc),
+      columnLabel,
+      rowIndex: cellRowIndex,
+      optionTexts: optionTextsOf(el),
+      manual: "readonly",
+      prefilled: prefilledOf(el, kind)
+    })
+    // 只读条目签名加后缀：避免与同名可编辑字段撞签名（itemsBySig/确认回写隔离）
+    field.signature = `${field.signature}|ro`
+    results.push(field)
+  }
   return results
 }

@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest"
 
 import { matchField, buildFillPlan } from "../../src/core/matching/match"
-import { scanDocument } from "../../src/core/matching/scan"
+import { scanDocument, scanReadonlyFields } from "../../src/core/matching/scan"
 import { fieldSignature } from "../../src/core/matching/signature"
 import type { ScannedField } from "../../src/core/matching/scan"
 import { loadProfileFixture, parseFixture } from "./helpers/seed-profile"
@@ -215,5 +215,47 @@ describe("buildFillPlan（含 FR-017 冲突与缺失判定）", () => {
     expect(degree).toBeDefined()
     expect(degree?.action).toBe("confirm")
     expect(degree?.match.confidence).not.toBe("high")
+  })
+})
+
+describe("T057 只读控件上报（需人工，而非静默未找到）", () => {
+  const doc = new DOMParser().parseFromString(
+    `<form>
+      <label for="deg">学历</label><input id="deg" value="本科" readonly />
+      <input id="junk" name="field_9981" readonly />
+      <input type="password" readonly />
+      <input id="vis" readonly style="display:none" />
+      <input id="dis" readonly disabled />
+    </form>`,
+    "text/html"
+  )
+  const ro = scanReadonlyFields(doc)
+
+  it("扫描到只读字段并标 manual=readonly；密码/隐藏/禁用被排除", () => {
+    expect(ro.map((f) => f.labelText)).toContain("学历")
+    expect(ro.every((f) => f.manual === "readonly")).toBe(true)
+    expect(ro.some((f) => f.labelText === "")).toBe(true) // 无语义只读控件也扫到，由 plan 过滤
+    expect(ro.some((f) => (f.element as HTMLInputElement).type === "password")).toBe(false)
+    expect(ro.some((f) => (f.element as HTMLInputElement).disabled)).toBe(false)
+    expect(ro.some((f) => (f.element as HTMLElement).style.display === "none")).toBe(false)
+  })
+
+  it("FR-019 不变：scanDocument 仍不返回只读控件", () => {
+    expect(scanDocument(doc)).toHaveLength(0)
+  })
+
+  it("匹配到资料字段的只读 → manual（需人工，带原因）；匹配不上的 → 不上报", () => {
+    const { profile: p, entries: e } = loadProfileFixture()
+    const plan = buildFillPlan(ro, p, e)
+    expect(plan.items).toHaveLength(1)
+    const item = plan.items[0]
+    expect(item?.action).toBe("manual")
+    expect(item?.match.semanticFieldId).toBe("basic.degree")
+    expect(item?.reason).toContain("只读")
+  })
+
+  it("只读签名带 |ro 后缀，不与可编辑字段撞签名", () => {
+    const deg = ro.find((f) => f.labelText === "学历")
+    expect(deg?.signature.endsWith("|ro")).toBe(true)
   })
 })

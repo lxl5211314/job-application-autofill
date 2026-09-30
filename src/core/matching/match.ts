@@ -171,7 +171,9 @@ export function matchField(field: ScannedField, memory?: FieldMemory | null): Fi
     }
   }
 
-  if (field.manual) return base
+  // 黑名单控件（密码/上传/协议等）不参与匹配；只读控件（T057）除外——
+  // 它需要匹配出字段名以便上报「需人工」，但永远不会被 fill
+  if (field.manual && field.manual !== "readonly") return base
 
   const label = field.labelText
   if (label && excluded(label)) return base
@@ -307,6 +309,19 @@ export function buildFillPlan(
 
   for (const field of scanned) {
     if (field.manual) {
+      // T057：只读控件不填写——仅在匹配到资料字段时上报「需人工」（带字段名），
+      // 匹配不上的只读控件不上报（与 FR-019 的静默过滤保持一致，避免噪音）
+      if (field.manual === "readonly") {
+        const roMatch = matchField(field, null)
+        if (roMatch.semanticFieldId && !roMatch.ambiguous) {
+          items.push({
+            match: roMatch,
+            action: "manual",
+            reason: "只读控件（需在页面弹层中选择），不自动填写"
+          })
+        }
+        continue
+      }
       items.push({
         match: {
           field,
