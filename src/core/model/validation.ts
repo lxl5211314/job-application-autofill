@@ -5,6 +5,8 @@ import type { ExperienceEntry, Profile, ScalarFieldId } from "./types"
 
 export const PHONE_RE = /^1[3-9]\d{9}$/
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/** T063：出生日期宽松格式（1999 / 1999-09 / 1999-09-01 / 1999年9月1日 / 1999.09.01） */
+export const BIRTHDAY_RE = /^\d{3,4}\s*[-./年]?\s*\d{0,2}\s*[-./月]?\s*\d{0,2}\s*日?$/
 
 export const MAX_NAME_LENGTH = 60
 export const MAX_TEXT_LENGTH = 500
@@ -38,6 +40,18 @@ export function validateScalarValue(fieldId: ScalarFieldId, rawValue: string): s
   if (fieldId === "basic.email") {
     if (value === "") return null
     if (!EMAIL_RE.test(value)) return "邮箱格式不正确"
+    return null
+  }
+
+  if (fieldId === "basic.gender") {
+    if (value === "") return null
+    if (!["男", "女"].includes(value)) return "性别只能填「男」或「女」"
+    return null
+  }
+
+  if (fieldId === "basic.birthday") {
+    if (value === "") return null
+    if (!BIRTHDAY_RE.test(value)) return "出生日期格式示例：1999-09-01 或 1999年9月"
     return null
   }
 

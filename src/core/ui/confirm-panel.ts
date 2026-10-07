@@ -4,7 +4,7 @@
 
 import { fillField } from "../filling/fill"
 import type { ActiveSession } from "../filling/session-state"
-import type { FillPlanItem } from "../matching/match"
+import { planReportLabel, type FillPlanItem } from "../matching/match"
 import { sendToBackground } from "../messaging"
 import { maskValue } from "../model/mask"
 import type { FillItemStatus, FillReportItem } from "../model/types"
@@ -83,6 +83,29 @@ function resolve(
   if (session.report) void sendToBackground("report:save", session.report)
 }
 
+// P2-2：确认项按原因分组展示（先看真歧义/页面冲突，噪音类靠后）
+const GROUPS: Array<{ title: string; test: (item: FillPlanItem) => boolean }> = [
+  { title: "标签有歧义（可能对应多个字段），请选择", test: (i) => i.match.ambiguous },
+  { title: "页面已有值与资料库不一致（不自动覆盖）", test: (i) => /页面已有内容/.test(i.reason ?? "") },
+  { title: "下拉/单选选项与资料库措辞不一致", test: (i) => /选项措辞/.test(i.reason ?? "") },
+  { title: "资料库字段待核对", test: (i) => /待核对/.test(i.reason ?? "") },
+  { title: "其他待确认", test: () => true }
+]
+
+function reportStatsLine(session: ActiveSession): string | null {
+  const report = session.report
+  if (!report) return null
+  let filled = 0
+  let notFound = 0
+  let manual = 0
+  for (const item of report.items) {
+    if (item.status === "filled") filled += 1
+    else if (item.status === "not_found") notFound += 1
+    else if (item.status === "manual_required") manual += 1
+  }
+  return `本次已填 ${filled} · 未找到 ${notFound} · 需人工 ${manual}`
+}
+
 /** 渲染（或复用）确认面板；仅列出仍待确认的 confirm 项 */
 export function renderConfirmPanel(session: ActiveSession): void {
   const pending = pendingItems(session)
@@ -113,85 +136,111 @@ export function renderConfirmPanel(session: ActiveSession): void {
 
   const rerender = (): void => renderConfirmPanel(session)
 
-  for (const item of pending) {
-    const card = el("div", {
-      className: "panel-item",
-      style:
-        "flex-direction:column;align-items:stretch;gap:4px;padding:8px 0;border-bottom:1px solid #f3f4f6"
-    })
-
-    card.append(
-      el("div", { className: "label" }, [
-        item.match.field.labelText || item.match.field.nameIdPlaceholder || "(未识别字段)"
-      ])
+  const assigned = new Set<FillPlanItem>()
+  for (const group of GROUPS) {
+    const inGroup = pending.filter((i) => !assigned.has(i) && group.test(i))
+    if (inGroup.length === 0) continue
+    inGroup.forEach((i) => assigned.add(i))
+    root.append(
+      el(
+        "div",
+        { style: "font-size:12px;font-weight:600;color:#374151;margin:10px 0 2px" },
+        [`${group.title}（${inGroup.length}）`]
+      )
     )
 
-    if (item.match.ambiguous) {
-      card.append(
-        el("div", { className: "ambiguous-note" }, [
-          "该标签存在歧义（可能对应多个字段），请手动选择（FR-022）"
-        ])
-      )
-    }
-    if (item.reason) {
-      card.append(el("div", { className: "ambiguous-note", style: "color:#6b7280" }, [item.reason]))
-    }
+    for (const item of inGroup) {
+      const card = el("div", {
+        className: "panel-item",
+        style:
+          "flex-direction:column;align-items:stretch;gap:4px;padding:8px 0;border-bottom:1px solid #f3f4f6"
+      })
 
-    const candidates = candidatesOf(item)
-    const valueKind: "text" | "option" =
-      item.match.field.controlKind === "select" || item.match.field.controlKind === "radio"
-        ? "option"
-        : "text"
-
-    const pick = (value: string): void => {
-      const result = fillField(item.match.field, value, { allowConflict: true })
-      if (!result.filled) {
-        card.append(el("div", { className: "ambiguous-note" }, [`填入失败（${result.reason}）`]))
-        return
+      // P2-1：标题用可读中文（语义字段名优先），页面原始标识降级为副行
+      const pageLabel =
+        item.match.field.labelText || item.match.field.nameIdPlaceholder || "(未识别字段)"
+      const primary = planReportLabel(item.match)
+      card.append(el("div", { className: "label" }, [primary]))
+      if (primary !== pageLabel) {
+        card.append(
+          el("div", { className: "ambiguous-note", style: "color:#9ca3af" }, [
+            `页面字段：${pageLabel}`
+          ])
+        )
       }
-      const applied = result.appliedValue ?? value
-      markResolved(session, item, applied)
-      resolve(session, item, { kind: "pick", value: applied }, valueKind)
-      rerender()
+
+      if (item.match.ambiguous) {
+        card.append(
+          el("div", { className: "ambiguous-note" }, [
+            "该标签存在歧义（可能对应多个字段），请手动选择（FR-022）"
+          ])
+        )
+      }
+      if (item.reason) {
+        card.append(el("div", { className: "ambiguous-note", style: "color:#6b7280" }, [item.reason]))
+      }
+
+      const candidates = candidatesOf(item)
+      const valueKind: "text" | "option" =
+        item.match.field.controlKind === "select" || item.match.field.controlKind === "radio"
+          ? "option"
+          : "text"
+
+      const pick = (value: string): void => {
+        const result = fillField(item.match.field, value, { allowConflict: true })
+        if (!result.filled) {
+          card.append(el("div", { className: "ambiguous-note" }, [`填入失败（${result.reason}）`]))
+          return
+        }
+        const applied = result.appliedValue ?? value
+        markResolved(session, item, applied)
+        resolve(session, item, { kind: "pick", value: applied }, valueKind)
+        rerender()
+      }
+
+      const options = el("div", { className: "confirm-options" })
+      for (const candidate of candidates) {
+        const btn = el("button", { type: "button", onClick: () => pick(candidate) }, [candidate])
+        options.append(btn)
+      }
+      card.append(options)
+
+      // T036: 无候选（或都不合适）→ 自定义值
+      const custom = el("div", { className: "confirm-custom" })
+      const input = el("input", {
+        type: "text",
+        placeholder: candidates.length === 0 ? "无候选，请输入值…" : "或输入自定义值…"
+      }) as HTMLInputElement
+      const okBtn = el("button", { className: "primary", type: "button" }, ["填入"])
+      okBtn.addEventListener("click", () => {
+        const value = input.value.trim()
+        if (value === "") return
+        pick(value)
+      })
+      custom.append(input, okBtn)
+      card.append(custom)
+
+      const actions = el("div", { className: "confirm-actions" })
+      const skipBtn = el("button", { type: "button" }, ["跳过（保持页面原状）"])
+      skipBtn.addEventListener("click", () => {
+        // 跳过：不填、不写记忆（FR-023）；报告条目保持 needs_confirm
+        session.resolved.add(item)
+        resolve(session, item, { kind: "skip" }, valueKind)
+        rerender()
+      })
+      actions.append(skipBtn)
+      card.append(actions)
+
+      root.append(card)
     }
-
-    const options = el("div", { className: "confirm-options" })
-    for (const candidate of candidates) {
-      const btn = el("button", { type: "button", onClick: () => pick(candidate) }, [candidate])
-      options.append(btn)
-    }
-    card.append(options)
-
-    // T036: 无候选（或都不合适）→ 自定义值
-    const custom = el("div", { className: "confirm-custom" })
-    const input = el("input", {
-      type: "text",
-      placeholder: candidates.length === 0 ? "无候选，请输入值…" : "或输入自定义值…"
-    }) as HTMLInputElement
-    const okBtn = el("button", { className: "primary", type: "button" }, ["填入"])
-    okBtn.addEventListener("click", () => {
-      const value = input.value.trim()
-      if (value === "") return
-      pick(value)
-    })
-    custom.append(input, okBtn)
-    card.append(custom)
-
-    const actions = el("div", { className: "confirm-actions" })
-    const skipBtn = el("button", { type: "button" }, ["跳过（保持页面原状）"])
-    skipBtn.addEventListener("click", () => {
-      // 跳过：不填、不写记忆（FR-023）；报告条目保持 needs_confirm
-      session.resolved.add(item)
-      resolve(session, item, { kind: "skip" }, valueKind)
-      rerender()
-    })
-    actions.append(skipBtn)
-    card.append(actions)
-
-    root.append(card)
   }
 
-  panel.root.replaceChildren(header, root)
+  const statsLine = reportStatsLine(session)
+  const stats = statsLine
+    ? el("div", { className: "ambiguous-note", style: "color:#6b7280" }, [statsLine])
+    : null
+
+  panel.root.replaceChildren(header, ...(stats ? [stats] : []), root)
 }
 
 /** T034 入口：会话结束后若有待确认条目则弹出确认面板 */

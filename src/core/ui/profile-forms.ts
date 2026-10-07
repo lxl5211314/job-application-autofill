@@ -1,4 +1,4 @@
-// T028: 基本信息 & 求职意向表单（7+3 标量字段，FR-003 实时校验、needs_review 徽标）
+// T028: 基本信息 & 求职意向表单（9+3 标量字段，FR-003 实时校验、needs_review 徽标）
 
 import { semanticFieldLabel } from "../matching/vocabulary"
 import { getScalarField, type Profile, type ScalarFieldId } from "../model/types"
@@ -14,6 +14,8 @@ const INPUT_TYPE: Partial<Record<ScalarFieldId, string>> = {
 }
 
 const PLACEHOLDER: Partial<Record<ScalarFieldId, string>> = {
+  "basic.gender": "男 或 女",
+  "basic.birthday": "1999-09-01",
   "basic.phone": "13800138000",
   "basic.email": "you@example.com",
   "intent.salary": "15-20K 或 15000-20000"

@@ -1,5 +1,6 @@
 // T032: 确认路由单测（FR-013/014/017）
-// low/gray/conflict/歧义 → 一律 confirm（needs_confirm）且不自动填；
+// 歧义/资料待核对/预填冲突/选项措辞不一致 → confirm（needs_confirm）且不自动填；
+// T058 P1-3：仅 name/id 弱信号 → skip（不进确认面板，报告归未找到）；
 // 候选值逐字来自页面选项（select 措辞不一致时 value 用资料库值、候选列表为页面原文）
 
 import { describe, expect, it } from "vitest"
@@ -31,15 +32,17 @@ describe("低置信/歧义 → needs_confirm", () => {
     expect(item?.match.ambiguous).toBe(true)
   })
 
-  it("gray（仅 name/id 信号）→ confirm 不自动填", () => {
+  it("gray（仅 name/id 信号）→ skip 不确认不填（T058 P1-3）", () => {
     const doc = new DOMParser().parseFromString(
       `<form><input name="phone" type="text" /></form>`,
       "text/html"
     )
     const field = scanDocument(doc)[0] as ScannedField
     const plan = buildFillPlan([field], profile, entries)
-    expect(plan.items[0]?.action).toBe("confirm")
+    expect(plan.items[0]?.action).toBe("skip")
     expect(plan.items[0]?.match.confidence).toBe("gray")
+    expect(plan.items[0]?.match.weak).toBe(true)
+    expect(plan.items[0]?.reason).toContain("弱信号")
   })
 
   it("资料库待核对（needs_review）→ confirm", () => {

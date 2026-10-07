@@ -8,7 +8,9 @@
 
 | semanticFieldId | 类型/控件 | 中文别名（label/id/placeholder 命中） | 英文别名 | 备注 |
 |---|---|---|---|---|
-| `basic.name` | text | 姓名、名字、真实姓名、申请人姓名、姓 名 | name, full name, applicant name | 与"联系人姓名"区分（后者不匹配） |
+| `basic.name` | text | 姓名、名字、真实姓名、申请人姓名、姓 名、姓、名 | name, full name, applicant name, surname, first name, given name | 与"联系人姓名"区分（后者不匹配）；「姓/名」两输入框布局按 `splitNameValue` 拆分（T061，复姓 2 字） |
+| `basic.gender` | radio/select/text | 性别 | gender, sex | T063；值归一化 男/女；选项等价 男↔男性↔Male（`GENDER_EQUIVALENCES`）；简历锚点「性别：」 |
+| `basic.birthday` | text/select | 出生日期、出生年月、出生年月日、出生时间、生日 | birthday, birth date, date of birth, dob | T063；宽松格式 1999 / 1999-09 / 1999年9月；只读日期弹层走 T057 上报「需人工」 |
 | `basic.phone` | tel/text | 手机号、手机号码、联系电话、移动电话、手机 | mobile, phone, cell, telephone | 归一化：去空格/连字符/+86 前缀 |
 | `basic.email` | email/text | 邮箱、电子邮箱、电子邮件、Email 地址 | email, e-mail | 需含 `@` 形态时优先 email 类型控件 |
 | `basic.school` | text | 学校、毕业院校、就读学校、最高学历毕业学校、学校名称 | school, university, college, institution | 教育经历条目内同名字段由条目负责 |
@@ -58,6 +60,7 @@ signature = sha1(
 
 | 档位 | 条件 | 行为 |
 |---|---|---|
-| high | 记忆命中（非歧义）或 别名精确命中 + 控件类型吻合 + 无冲突 | 直接填写 |
-| gray | 单一候选但信号弱（仅 name 相似/仅选项形态吻合）、或存在多个候选 | ~~可选 LLM 辅助~~（v1.1 预留，spec FR-028）→ 直接进确认面板 |
-| low | 无候选 / 歧义标签 / 与页面预填值冲突 | 确认面板（附候选值），或页面无对应字段→`not_found` |
+| high | 记忆命中（非歧义）或 `autocomplete` 属性白名单（T058）或 别名精确命中 + 控件类型吻合 + 无冲突 | 直接填写 |
+| gray（label 包含/选项形态，控件吻合） | 单一候选但信号较弱、或存在多个候选 | ~~可选 LLM 辅助~~（v1.1 预留，spec FR-028）→ 确认面板 |
+| gray（仅 name/id 弱信号，T058 P1-3） | 词边界匹配 name/id、无 label、控件吻合（如 `userPhone`） | **不确认不填写** → `action:skip`，报告 `not_found` + 原因（降噪：成熟插件对拿不准的低置信匹配宁可不问） |
+| low | 无候选 / 歧义标签 / 与页面预填值冲突 | 歧义与冲突 → 确认面板（附候选值）；无候选 → 静默不报 |

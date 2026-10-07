@@ -134,6 +134,29 @@ describe("抽取规则合成文本", () => {
     expect(entries).toHaveLength(0)
     expect(Object.values(fields).every((f) => f?.extracted === false)).toBe(true)
   })
+
+  it("T063 “性别：”锚点 → 归一化为 男/女（Male 也认）", () => {
+    expect(extractFromText("性别：男\n手机 13812345678").fields["basic.gender"]).toMatchObject({
+      value: "男",
+      confidence: "high"
+    })
+    expect(extractFromText("Gender: Female").fields["basic.gender"]).toMatchObject({
+      value: "女",
+      confidence: "high"
+    })
+  })
+
+  it("T063 “出生年月：”锚点 → 提取日期片段", () => {
+    const { fields } = extractFromText("出生年月：1999年9月\n政治面貌：共青团员")
+    expect(fields["basic.birthday"]).toMatchObject({ value: "1999年9月", confidence: "high" })
+    const { fields: f2 } = extractFromText("出生日期：1999-09-15（26岁）")
+    expect(f2["basic.birthday"]?.value).toBe("1999-09-15")
+  })
+
+  it("T063 性别无法映射（如“保密”）→ 不抽取（校验只认 男/女）", () => {
+    const { fields } = extractFromText("性别：保密")
+    expect(fields["basic.gender"]?.extracted).toBe(false)
+  })
 })
 
 describe("扫描件判定（FR-009）", () => {

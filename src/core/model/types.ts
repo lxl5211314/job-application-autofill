@@ -15,6 +15,9 @@ export interface ProfileField {
 
 export const BASIC_FIELD_IDS = [
   "basic.name",
+  // T063：校招页「个人信息」区的常客（性别/出生日期），不在原 10 字段里导致整块静默
+  "basic.gender",
+  "basic.birthday",
   "basic.phone",
   "basic.email",
   "basic.school",

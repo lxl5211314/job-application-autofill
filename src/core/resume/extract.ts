@@ -75,6 +75,12 @@ const ANCHORS: Anchor[] = [
     re: /(?:最高学历|学历)\s*[:：]\s*(大学专科|大专|专科|大学本科|本科|硕士研究生|硕士|博士研究生|博士)/
   },
   { id: "basic.political_status", re: /政治面貌\s*[:：]\s*([^\r\n]+)/ },
+  // T063：性别/出生日期（校招简历标配行；性别归一化见 extractFromText）
+  { id: "basic.gender", re: /(?:性别|Gender)\s*[:：]\s*([男女]|male|female)/i },
+  {
+    id: "basic.birthday",
+    re: /(?:出生年月日|出生日期|出生年月|出生时间|生日|Birth(?:\s*date)?)\s*[:：]\s*([^\r\n]{4,24})/i
+  },
   { id: "intent.position", re: /(?:应聘岗位|意向岗位|求职意向)\s*[:：]\s*([^\r\n]+)/ },
   { id: "intent.city", re: /(?:意向城市|期望城市)\s*[:：]\s*([^\r\n]+)/ },
   { id: "intent.salary", re: /(?:期望薪资|薪资要求)\s*[:：]\s*([^\r\n]+)/ }
@@ -328,6 +334,25 @@ export function extractFromText(raw: string): ExtractResult {
   for (const anchor of ANCHORS) {
     const m = anchor.re.exec(text)
     if (m?.[1]) set(anchor.id, m[1], "high")
+  }
+
+  // T063：性别归一化为 男/女（Male/Female/男性…统一），映射不上则清空（校验只认 男/女）
+  const gender = fields["basic.gender"]
+  if (gender?.extracted) {
+    const t = gender.value.trim().toLowerCase()
+    if (/^(?:男|male|m)$/.test(t) || /^男/.test(t)) gender.value = "男"
+    else if (/^(?:女|female|f)$/.test(t) || /^女/.test(t)) gender.value = "女"
+    else fields["basic.gender"] = { value: "", confidence: "low", extracted: false }
+  }
+  // T063：出生日期从宽松捕获里抠出日期片段（1999年9月 / 1999-09-15 / 1999.09），
+  // 抠不出 → 视为没抽到
+  const birthday = fields["basic.birthday"]
+  if (birthday?.extracted) {
+    const m = birthday.value.match(
+      /\d{4}(?:\s*[-./年]\s*\d{1,2})?(?:\s*[-./月]\s*\d{1,2}|\s*月)?(?:\s*日)?/
+    )
+    if (m) birthday.value = m[0].replace(/\s+/g, "")
+    else fields["basic.birthday"] = { value: "", confidence: "low", extracted: false }
   }
 
   const phone = PHONE_RE.exec(text)

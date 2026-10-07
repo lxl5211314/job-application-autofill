@@ -34,7 +34,7 @@
 
 | 分区 | 内容 |
 |------|------|
-| 基本信息 | `basic.name` 姓名、`basic.phone` 手机号、`basic.email` 邮箱、`basic.school` 学校、`basic.major` 专业、`basic.degree` 学历、`basic.political_status` 政治面貌 |
+| 基本信息 | `basic.name` 姓名、`basic.gender` 性别、`basic.birthday` 出生日期、`basic.phone` 手机号、`basic.email` 邮箱、`basic.school` 学校、`basic.major` 专业、`basic.degree` 学历、`basic.political_status` 政治面貌 |
 | 求职意向 | `intent.position` 意向岗位、`intent.city` 意向城市、`intent.salary` 期望薪资 |
 | 教育经历 | 学校/专业/起止时间/描述（`entry.education.*`） |
 | 实习经历 | 公司/职位/起止时间/描述（`entry.internship.*`） |
@@ -104,7 +104,7 @@ npm install          # postinstall 自动复制 pdf.js worker → resources/pdf.
 npm run dev          # 开发构建（热更新）→ build/chrome-mv3-dev
 npm run build        # 生产构建 → build/chrome-mv3-prod
 npm run package      # 打包 zip → build/chrome-mv3-prod.zip
-npm test             # Vitest 单元测试（jsdom，116 项）
+npm test             # Vitest 单元测试（jsdom，140 项）
 npm run test:watch   # 监听模式
 npm run lint         # ESLint（含 scripts/*.mjs）
 npx tsc --noEmit     # TypeScript 严格类型检查
@@ -152,7 +152,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ### 多步表单 / 动态表单
 
-第二步、第三步动态追加的字段会被 MutationObserver 自动补扫（FR-016，防抖 300ms，主窗口 3s + 补扫 ≤5s）。若超过预算仍未出现，重新点「一键填写」即可。
+第二步、第三步动态追加的字段会被 MutationObserver **与滚动**（T064，懒加载表单滚动到才渲染）自动补扫（FR-016，防抖 300ms，主窗口 3s + 补扫 ≤5s）。若超过预算仍未出现，滚动页面后重新点「一键填写」即可。
 
 ---
 
@@ -202,11 +202,14 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 1. **scan.ts** —— 枚举可填写控件；抽取 label（`label[for]` → `aria-label` → `placeholder` → 表格列头）、区块标题、选项集；黑名单判定；过滤 readonly/disabled/隐藏。另由 `scanReadonlyFields` 单独收集只读控件（T057：匹配到资料字段则归「需人工」，不静默丢弃）
 2. **signature.ts** —— `norm(label) + controlKind + norm(name/id/placeholder) + 选项指纹` 生成稳定签名
-3. **vocabulary.ts** —— 中英别名词表（10 个标量字段）、经历区块信号、非填写区黑名单、歧义标签
-4. **match.ts** —— 打分定档：
-   - `high`（≥100 别名精确命中 + 控件吻合，或记忆命中）→ 直接填
-   - `gray`（60~99 包含命中 / 45 仅 name 信号）→ 确认面板
-   - `low`（歧义 / 无候选）→ 确认面板
+3. **vocabulary.ts** —— 中英别名词表（12 个标量字段，含 T063 性别/出生日期）、`autocomplete` 属性白名单（T058）、经历区块信号、非填写区黑名单、歧义标签
+4. **match.ts** —— 打分定档（T058 降噪后）：
+   - `high`（110 `autocomplete` 属性 / ≥100 别名精确命中 + 控件吻合，或记忆命中）→ 直接填
+   - `gray` 且为 label 包含/选项形态命中（控件类型吻合）→ 确认面板
+   - `gray` 但**仅 name/id 弱信号**（词边界匹配，如 `userPhone`）→ 跳过不问，报告归「未找到」+原因
+   - `low`（歧义 / 无候选）→ 歧义进确认面板，无候选静默跳过
+   - 勾选框（是/否问卷题）不作标量填写目标；radio 冲突按选中项**可见文案**比较（value `on`/`1` 不误报）
+   - 姓名两输入框（姓/名、Last/First Name）按页面标签把资料库整名**拆分**填写（T061，复姓表+英文名按空格）
 5. **fill.ts** —— 原生 value setter + `input/change/blur` 事件（受控组件兼容）、select 等价映射（本科/学士↔Bachelor）、radio/checkbox `click()`
 
 ---
@@ -215,7 +218,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ### 抽取规则（`src/core/resume/extract.ts`，正则 + 词表，零 LLM）
 
-- 标量锚点：`姓名：` / `手机` / `邮箱` / `学校` / `专业` / `学历` 等中英标签
+- 标量锚点：`姓名：` / `性别：` / `出生年月：` / `手机` / `邮箱` / `学校` / `专业` / `学历` 等中英标签（T063）
 - 经历时间段：`20xx.xx - 20xx.xx`（行首 / 行尾 / 单日期三种形态）
 - 低置信回退：解析不到日期的经历 → `state=needs_review`（草稿页标「待核对」）
 - T055 加固：控制字符剔除、康熙部首/兼容字形归一、无「姓名：」标签的首行姓名回退、日期残骸降级为无日期条目
@@ -250,7 +253,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ## 测试与验收
 
-### 单元测试（Vitest，116 项 / 9 文件）
+### 单元测试（Vitest，140 项 / 9 文件）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -302,6 +305,9 @@ Playwright 加载 `build/chrome-mv3-prod`，**54 项断言**，覆盖：
 2. 检查页面字段是否为 `readonly` 自定义控件（点开弹层选择的那种）——按设计不自动填，归 `需人工`
 3. 控件若在 iframe 内，v1 内容脚本只扫顶层框架（`all_frames: false`）
 
+**Q：确认面板弹出一堆「陌生字段」（如 `hasAppliedOtherJob`）根本没法选？**
+旧版本把仅靠 name/id 猜出的低置信匹配也塞进确认面板（T058 已修复）。现在：name/id 弱信号直接跳过归「未找到」（悬停看原因）、是/否勾选题不进确认、`autocomplete` 标准属性优先直填；确认面板只留**真歧义 / 页面值冲突 / 选项措辞不一致**三类，并按组展示可读中文字段名。仍看到大量确认项 → **重载扩展**后重试。
+
 **Q：导入 PDF 提示"无法提取文本"？**
 扫描件/图片型 PDF 没有文本层（FR-009 明确报错）。请换文本型 PDF，或用 `.txt/.md` 导出后导入。
 
@@ -338,7 +344,7 @@ scripts/
   copy-pdf-worker.mjs      # postinstall 复制 pdf.js worker
 specs/                     # spec-kit 规格（spec/data-model/contracts/tasks/quickstart）
 docs/usage.md              # 使用指南（安装/建档/填写/确认/记忆/排查）
-tests/unit/                # Vitest 单测（116 项）
+tests/unit/                # Vitest 单测（140 项）
 tests/fixtures/            # 合成夹具（HTML 表单页、PDF/txt 简历）
 ```
 
@@ -351,7 +357,7 @@ tests/fixtures/            # 合成夹具（HTML 表单页、PDF/txt 简历）
 | [`spec.md`](./specs/001-job-application-autofill/spec.md) | 功能需求 FR-001~028、场景 S1~S10、SC 量化指标 |
 | [`data-model.md`](./specs/001-job-application-autofill/data-model.md) | Profile / 经历 / 记忆 / 报告 / 草稿 / 设置 |
 | [`contracts/`](./specs/001-job-application-autofill/contracts/) | 消息契约、语义字段词表、LLM 契约（v1.1） |
-| [`tasks.md`](./specs/001-job-application-autofill/tasks.md) | 任务清单 T001~T056（全部完成） |
+| [`tasks.md`](./specs/001-job-application-autofill/tasks.md) | 任务清单 T001~T064（全部完成） |
 | [`quickstart.md`](./specs/001-job-application-autofill/quickstart.md) | 手工验收场景 S0~S10 |
 
 ---

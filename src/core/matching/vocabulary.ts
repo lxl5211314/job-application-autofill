@@ -25,9 +25,22 @@ export interface ScalarVocab {
 export const SCALAR_VOCABULARY: ScalarVocab[] = [
   {
     id: "basic.name",
-    zh: ["姓名", "名字", "真实姓名", "申请人姓名", "姓 名", "本人姓名"],
-    en: ["name", "full name", "applicant name", "your name"],
+    zh: ["姓名", "名字", "真实姓名", "申请人姓名", "姓 名", "本人姓名", "姓", "名"],
+    en: ["name", "full name", "applicant name", "your name", "surname", "last name", "lastname", "first name", "firstname", "given name", "family name"],
     controls: ["text"]
+  },
+  {
+    // T063：性别/出生日期（校招「个人信息」区标配；radio 勾选项由 fill.ts click 执行）
+    id: "basic.gender",
+    zh: ["性别"],
+    en: ["gender", "sex"],
+    controls: ["radio", "select", "text"]
+  },
+  {
+    id: "basic.birthday",
+    zh: ["出生日期", "出生年月", "出生年月日", "出生时间", "生日"],
+    en: ["birthday", "birth date", "date of birth", "dob"],
+    controls: ["text", "select"]
   },
   {
     id: "basic.phone",
@@ -174,6 +187,18 @@ export const IGNORED_INPUT_TYPES = new Set(["hidden"])
 
 // ---------- §4 歧义字段（FR-022） ----------
 
+// HTML autocomplete 属性 → 语义字段（业界成熟做法：标准属性优先于文本启发式，
+// 只收录无歧义的白名单 token；organization/address-level1 等有歧义的不收）
+export const AUTOCOMPLETE_MAP: Record<string, ScalarFieldId> = {
+  name: "basic.name",
+  email: "basic.email",
+  tel: "basic.phone",
+  "tel-national": "basic.phone",
+  "tel-local": "basic.phone",
+  sex: "basic.gender",
+  bday: "basic.birthday"
+}
+
 export const AMBIGUOUS_LABELS = [
   "备注",
   "其他说明",
@@ -218,6 +243,12 @@ export const POLITICAL_STATUS_VALUES = [
   "民主党派"
 ]
 
+/** T063：性别选项等价（男/男性/male 同义，页面措辞不一致也能直填） */
+export const GENDER_EQUIVALENCES: Array<{ canonical: string; keys: string[] }> = [
+  { canonical: "男", keys: ["男", "男性", "male", "m"] },
+  { canonical: "女", keys: ["女", "女性", "female", "f"] }
+]
+
 // ---------- 值归一化辅助 ----------
 
 /** 语义字段 → 展示名（报告 not_found 条目用） */
@@ -241,6 +272,15 @@ export function findEquivalentOption(profileValue: string, options: string[]): s
   if (degree) {
     const equiv = options.find((o) =>
       degree.keys.some((k) => normOption(k) === normOption(o))
+    )
+    if (equiv) return equiv
+  }
+  const gender = GENDER_EQUIVALENCES.find((g) =>
+    g.keys.some((k) => normOption(k) === normOption(pv))
+  )
+  if (gender) {
+    const equiv = options.find((o) =>
+      gender.keys.some((k) => normOption(k) === normOption(o))
     )
     if (equiv) return equiv
   }

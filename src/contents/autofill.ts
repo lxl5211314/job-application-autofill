@@ -13,6 +13,7 @@ import type {
 } from "../core/model/types"
 import { buildFillPlan, planReportLabel, type FillPlanItem } from "../core/matching/match"
 import { scanDocument, scanReadonlyFields, type ScannedField } from "../core/matching/scan"
+import { semanticFieldLabel } from "../core/matching/vocabulary"
 import { sendToBackground, ok, type Request, type Response } from "../core/messaging"
 import { showConfirmPanel } from "../core/ui/confirm-panel"
 import { renderResultPanel } from "../core/ui/result-panel"
@@ -69,6 +70,9 @@ function reportItemFromPlan(item: FillPlanItem): FillReportItem {
       }
     case "missing":
       return { semanticFieldId: id, label, status: "missing_in_profile", reason: item.reason }
+    case "skip":
+      // P1-3：低置信弱信号跳过 → 报告归「未找到」并附原因（不进确认面板）
+      return { semanticFieldId: id, label, status: "not_found", reason: item.reason }
     case "manual":
       return {
         semanticFieldId: id,
@@ -120,7 +124,8 @@ function scalarIdsMissingFromPage(
 function collectReportItems(session: ActiveSession): FillReportItem[] {
   const items: FillReportItem[] = session.executed.map(reportItemFromPlan)
   for (const id of scalarIdsMissingFromPage(session.profile, session.coveredIds)) {
-    items.push({ semanticFieldId: id, label: id, status: "not_found" })
+    // T060：FR-014 未找到条目显示中文语义名（basic.school → 学校），不暴露内部 ID
+    items.push({ semanticFieldId: id, label: semanticFieldLabel(id), status: "not_found" })
   }
   return items
 }
@@ -191,7 +196,8 @@ async function lookupMemory(
   return map
 }
 
-/** 观察 DOM：主窗口 3s；期间有变更则最多再补扫 5s；300ms 防抖（FR-016 / R5） */
+/** 观察 DOM：主窗口 3s；期间有变更则最多再补扫 5s；300ms 防抖（FR-016 / R5）
+ *  T064：滚动也触发补扫——分步/懒加载表单（学历、求职意向区常滚动到才渲染） */
 function observeRescan(session: ActiveSession, startedAt: number): () => Promise<void> {
   const mainDeadline = startedAt + MAIN_WINDOW_MS
   const hardDeadline = startedAt + MAIN_WINDOW_MS + RESCAN_BUDGET_MS
@@ -200,8 +206,7 @@ function observeRescan(session: ActiveSession, startedAt: number): () => Promise
   let timer: ReturnType<typeof setTimeout> | null = null
   let running = Promise.resolve()
 
-  const observer = new MutationObserver((mutations) => {
-    if (mutations.length === 0) return
+  const bump = (): void => {
     sawMutation = true
     lastMutationAt = Date.now()
     if (timer) clearTimeout(timer)
@@ -209,6 +214,11 @@ function observeRescan(session: ActiveSession, startedAt: number): () => Promise
       timer = null
       running = running.then(() => rescanRound(session))
     }, RESCAN_DEBOUNCE_MS)
+  }
+
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.length === 0) return
+    bump()
   })
 
   observer.observe(document.documentElement, {
@@ -217,6 +227,10 @@ function observeRescan(session: ActiveSession, startedAt: number): () => Promise
     attributes: true,
     attributeFilter: ["value", "checked", "disabled", "hidden", "style"]
   })
+
+  // T064：capture 捕获子元素滚动（scroll 不冒泡）；防抖后与 mutation 同路复扫
+  const onScroll = (): void => bump()
+  document.addEventListener("scroll", onScroll, { passive: true, capture: true })
 
   return async () => {
     while (Date.now() < mainDeadline) {
@@ -232,6 +246,7 @@ function observeRescan(session: ActiveSession, startedAt: number): () => Promise
     }
     await running
     observer.disconnect()
+    document.removeEventListener("scroll", onScroll, { capture: true })
   }
 }
 

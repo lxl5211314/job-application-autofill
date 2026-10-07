@@ -7,6 +7,7 @@ import { matchField, buildFillPlan } from "../../src/core/matching/match"
 import { scanDocument, scanReadonlyFields } from "../../src/core/matching/scan"
 import { fieldSignature } from "../../src/core/matching/signature"
 import type { ScannedField } from "../../src/core/matching/scan"
+import type { BasicFieldId, Profile } from "../../src/core/model/types"
 import { loadProfileFixture, parseFixture } from "./helpers/seed-profile"
 
 const fixtureDoc = parseFixture("sample-form.html")
@@ -218,6 +219,94 @@ describe("buildFillPlan（含 FR-017 冲突与缺失判定）", () => {
   })
 })
 
+describe("T058 P1 止血：低置信不进确认 + autocomplete 直填", () => {
+  const { profile, entries } = loadProfileFixture()
+
+  it("checkbox 问卷字段不匹配（hasAppliedOtherJob/isDomesticMobile 案例）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form>
+        <input type="checkbox" name="hasAppliedOtherJob" value="on" />
+        <select name="isDomesticMobile"><option value="">请选择</option><option value="a">国内手机</option><option value="b">海外手机</option></select>
+      </form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), profile, entries)
+    expect(plan.items.some((i) => i.match.semanticFieldId === "intent.position")).toBe(false)
+    expect(plan.items.some((i) => i.match.semanticFieldId === "basic.phone")).toBe(false)
+    expect(plan.items.filter((i) => i.action === "confirm")).toHaveLength(0)
+  })
+
+  it("name/id 弱信号 → skip（报告归未找到，不进确认面板）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><input name="phone" type="text" /></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), profile, entries)
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.phone")
+    expect(item?.action).toBe("skip")
+    expect(item?.reason).toContain("弱信号")
+    expect(plan.items.filter((i) => i.action === "confirm")).toHaveLength(0)
+  })
+
+  it("checkbox 精确标签命中也不进计划（勾选框不作标量目标）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="pf">政治面貌</label><input id="pf" type="checkbox" name="political_flag" /></form>`,
+      "text/html"
+    )
+    const matched = matchField(scanDocument(doc)[0] as ScannedField)
+    expect(matched.semanticFieldId).toBe("basic.political_status")
+    const plan = buildFillPlan(scanDocument(doc), profile, entries)
+    expect(plan.items.filter((i) => i.match.semanticFieldId === "basic.political_status")).toHaveLength(0)
+    expect(plan.items.filter((i) => i.action === "confirm")).toHaveLength(0)
+  })
+
+  it("autocomplete=email 属性 → high 直填（标准属性最高优先）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><input type="text" name="user_mail_prefill" autocomplete="email" /></form>`,
+      "text/html"
+    )
+    const field = scanDocument(doc)[0] as ScannedField
+    const match = matchField(field)
+    expect(match.semanticFieldId).toBe("basic.email")
+    expect(match.confidence).toBe("high")
+    const plan = buildFillPlan(scanDocument(doc), profile, entries)
+    expect(plan.items.find((i) => i.match.semanticFieldId === "basic.email")?.action).toBe("fill")
+  })
+
+  it("autocomplete=tel 在 text 控件上 → basic.phone high", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><input type="text" name="contact_prefill" autocomplete="tel" /></form>`,
+      "text/html"
+    )
+    const match = matchField(scanDocument(doc)[0] as ScannedField)
+    expect(match.semanticFieldId).toBe("basic.phone")
+    expect(match.confidence).toBe("high")
+  })
+
+  it("radio 预选用可见文案比较 value=1 不误报 FR-017 冲突", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><fieldset><legend>政治面貌</legend>
+        <label><input type="radio" name="political" value="1" checked />中共党员</label>
+        <label><input type="radio" name="political" value="2" />共青团员</label>
+      </fieldset></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), profile, entries)
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.political_status")
+    expect(item?.action).toBe("fill")
+  })
+
+  it("S2 学历下拉（label 部分命中）仍进确认（gray 保留，非 name/id 弱信号）", () => {
+    const step2 = parseFixture("sample-form-step2.html")
+    const plan = buildFillPlan(scanDocument(step2), profile, entries)
+    const degree = plan.items.find(
+      (i) => i.match.semanticFieldId === "basic.degree" && i.match.field.controlKind === "select"
+    )
+    expect(degree?.action).toBe("confirm")
+    expect(degree?.match.weak).not.toBe(true)
+  })
+})
+
 describe("T057 只读控件上报（需人工，而非静默未找到）", () => {
   const doc = new DOMParser().parseFromString(
     `<form>
@@ -257,5 +346,188 @@ describe("T057 只读控件上报（需人工，而非静默未找到）", () =>
   it("只读签名带 |ro 后缀，不与可编辑字段撞签名", () => {
     const deg = ro.find((f) => f.labelText === "学历")
     expect(deg?.signature.endsWith("|ro")).toBe(true)
+  })
+})
+
+describe("T061 姓名拆分（姓/名两输入框布局）", () => {
+  const splitDoc = new DOMParser().parseFromString(
+    `<form>
+      <p><label for="s">姓</label><input id="s" name="surname" type="text" /></p>
+      <p><label for="g">名</label><input id="g" name="givenName" type="text" /></p>
+    </form>`,
+    "text/html"
+  )
+
+  function nameOnlyProfile(name: string): Profile {
+    const p: Profile = { schemaVersion: 1, basics: {}, intent: {} }
+    p.basics["basic.name"] = {
+      value: name,
+      state: "confirmed",
+      source: "manual",
+      updatedAt: 0
+    }
+    return p
+  }
+
+  it("资料库整名拆到 姓/名 两个输入框（张三 → 张 / 三）", () => {
+    const { profile, entries } = loadProfileFixture()
+    const plan = buildFillPlan(scanDocument(splitDoc), profile, entries)
+    const fills = plan.items.filter(
+      (i) => i.action === "fill" && i.match.semanticFieldId === "basic.name"
+    )
+    expect(fills.map((i) => i.value).sort()).toEqual(["三", "张"])
+    expect(plan.notFound).not.toContain("basic.name")
+    expect(plan.items.filter((i) => i.action === "confirm")).toHaveLength(0)
+  })
+
+  it("复姓（欧阳明）拆成 欧阳 / 明", () => {
+    const plan = buildFillPlan(scanDocument(splitDoc), nameOnlyProfile("欧阳明"), [])
+    const fills = plan.items.filter(
+      (i) => i.action === "fill" && i.match.semanticFieldId === "basic.name"
+    )
+    expect(fills.map((i) => i.value).sort()).toEqual(["欧阳", "明"].sort())
+  })
+
+  it("合并的「姓名」单字段 → 整名不拆", () => {
+    const { profile, entries } = loadProfileFixture()
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="n">姓名</label><input id="n" type="text" /></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), profile, entries)
+    const fill = plan.items.find((i) => i.match.semanticFieldId === "basic.name")
+    expect(fill?.action).toBe("fill")
+    expect(fill?.value).toBe("张三")
+  })
+
+  it("英文名 John Smith → 姓 Smith / 名 John", () => {
+    const plan = buildFillPlan(scanDocument(splitDoc), nameOnlyProfile("John Smith"), [])
+    const fills = plan.items.filter(
+      (i) => i.action === "fill" && i.match.semanticFieldId === "basic.name"
+    )
+    expect(fills.map((i) => i.value).sort()).toEqual(["John", "Smith"])
+  })
+
+  it("仅英文标签（name 为空）「Last Name/First Name」也拆分", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form>
+        <p><label for="ln">Last Name</label><input id="ln" type="text" /></p>
+        <p><label for="fn">First Name</label><input id="fn" type="text" /></p>
+      </form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), nameOnlyProfile("John Smith"), [])
+    const fills = plan.items.filter(
+      (i) => i.action === "fill" && i.match.semanticFieldId === "basic.name"
+    )
+    expect(fills.map((i) => i.value).sort()).toEqual(["John", "Smith"])
+  })
+
+  it("合并的「Full Name」标签 → 整名不拆", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="fn2">Full Name</label><input id="fn2" type="text" /></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), nameOnlyProfile("John Smith"), [])
+    const fill = plan.items.find((i) => i.match.semanticFieldId === "basic.name")
+    expect(fill?.action).toBe("fill")
+    expect(fill?.value).toBe("John Smith")
+  })
+})
+
+describe("T063 性别/出生日期字段（个人信息区标配）", () => {
+  function profileWith(basics: Record<string, string>): Profile {
+    const p: Profile = { schemaVersion: 1, basics: {}, intent: {} }
+    for (const [id, value] of Object.entries(basics)) {
+      p.basics[id as BasicFieldId] = {
+        value,
+        state: "confirmed",
+        source: "manual",
+        updatedAt: 0
+      }
+    }
+    return p
+  }
+
+  it("性别 radio（男/女）→ 精确命中 high，直填勾选", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><fieldset><legend>性别</legend>
+        <label><input type="radio" name="gender" value="1" />男</label>
+        <label><input type="radio" name="gender" value="2" />女</label>
+      </fieldset></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), profileWith({ "basic.gender": "女" }), [])
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.gender")
+    expect(item?.action).toBe("fill")
+    expect(item?.value).toBe("女")
+    expect(item?.match.confidence).toBe("high")
+  })
+
+  it("性别 select 措辞「男性」↔ 资料「男」等价 → fill，不进确认", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="ge">性别</label><select id="ge">
+        <option value="">请选择</option><option value="m">男性</option><option value="f">女性</option>
+      </select></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanDocument(doc), profileWith({ "basic.gender": "男" }), [])
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.gender")
+    expect(item?.action).toBe("fill")
+    expect(plan.items.filter((i) => i.action === "confirm")).toHaveLength(0)
+  })
+
+  it("出生日期只读弹层 → manual（需人工，带字段名，T057 路径）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="bd">出生日期</label><input id="bd" value="1999-09-01" readonly /></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(
+      scanReadonlyFields(doc),
+      profileWith({ "basic.birthday": "1999-09-01" }),
+      []
+    )
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.birthday")
+    expect(item?.action).toBe("manual")
+    expect(item?.reason).toContain("只读")
+  })
+
+  it("资料库无性别 → 页面性别字段报 missing（不再整块静默）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><fieldset><legend>性别</legend>
+        <label><input type="radio" name="gender" value="1" />男</label>
+      </fieldset></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(
+      scanDocument(doc),
+      { schemaVersion: 1 as const, basics: {}, intent: {} },
+      []
+    )
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.gender")
+    expect(item?.action).toBe("missing")
+  })
+})
+
+describe("T062 只读上报排除 weak 弱信号", () => {
+  it("无标签 + 仅 name 弱信号的只读控件 → 不上报（幻影需人工案例）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><input name="phone_hint" value="123" readonly /></form>`,
+      "text/html"
+    )
+    const ro = scanReadonlyFields(doc)
+    const { profile, entries } = loadProfileFixture()
+    const plan = buildFillPlan(ro, profile, entries)
+    expect(plan.items.filter((i) => i.action === "manual")).toHaveLength(0)
+  })
+
+  it("精确标签只读（学历）→ 仍上报 manual（T057 行为保留）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="d2">学历</label><input id="d2" value="本科" readonly /></form>`,
+      "text/html"
+    )
+    const plan = buildFillPlan(scanReadonlyFields(doc), loadProfileFixture().profile, [])
+    const item = plan.items.find((i) => i.match.semanticFieldId === "basic.degree")
+    expect(item?.action).toBe("manual")
   })
 })

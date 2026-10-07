@@ -15,6 +15,8 @@ export interface ScannedField {
   controlKind: ControlKind
   labelText: string
   nameIdPlaceholder: string
+  /** HTML autocomplete 属性原文（P1-4：标准属性作为最高优先匹配信号） */
+  autoComplete?: string
   blockTitle: string
   columnLabel: string
   rowIndex: number
@@ -135,6 +137,11 @@ function nameIdOf(el: AnyControl): string {
   return candidates.sort((a, b) => b.length - a.length)[0] ?? ""
 }
 
+function autoCompleteOf(el: Element): string | undefined {
+  const v = cleanText(el.getAttribute("autocomplete")).toLowerCase()
+  return v === "" ? undefined : v
+}
+
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text))
 }
@@ -192,6 +199,7 @@ function makeField(params: {
   controlKind: ControlKind
   labelText: string
   nameIdPlaceholder: string
+  autoComplete?: string
   blockTitle: string
   columnLabel: string
   rowIndex: number
@@ -241,6 +249,7 @@ function scanRadioGroups(doc: Document, processed: Set<Element>): ScannedField[]
         controlKind: "radio",
         labelText: labelText || optionTexts[0] || "",
         nameIdPlaceholder: radio.name || radio.id || "",
+        autoComplete: autoCompleteOf(radio),
         blockTitle: findBlockTitle(radio, doc),
         columnLabel: "",
         rowIndex: -1,
@@ -299,6 +308,7 @@ export function scanDocument(doc: Document = document): ScannedField[] {
         controlKind: kind,
         labelText,
         nameIdPlaceholder: nameId,
+        autoComplete: autoCompleteOf(el),
         blockTitle,
         columnLabel,
         rowIndex: cellRowIndex,
@@ -338,6 +348,7 @@ export function scanReadonlyFields(doc: Document = document): ScannedField[] {
       controlKind: kind,
       labelText,
       nameIdPlaceholder: nameIdOf(el),
+      autoComplete: autoCompleteOf(el),
       blockTitle: findBlockTitle(el, doc),
       columnLabel,
       rowIndex: cellRowIndex,

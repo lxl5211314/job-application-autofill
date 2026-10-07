@@ -184,3 +184,21 @@ describe("validateEntry", () => {
     expect(validateEntry(e)).toEqual({ "internship.title": "标题/名称不能为空" })
   })
 })
+
+describe("T063 性别/出生日期校验", () => {
+  it("性别只认 男/女，留空允许", () => {
+    expect(validateScalarValue("basic.gender", "男")).toBeNull()
+    expect(validateScalarValue("basic.gender", "女")).toBeNull()
+    expect(validateScalarValue("basic.gender", "")).toBeNull()
+    expect(validateScalarValue("basic.gender", "保密")).toContain("男")
+  })
+
+  it("出生日期宽松格式通过，乱码报错", () => {
+    expect(validateScalarValue("basic.birthday", "1999-09-01")).toBeNull()
+    expect(validateScalarValue("basic.birthday", "1999年9月")).toBeNull()
+    expect(validateScalarValue("basic.birthday", "1999.09")).toBeNull()
+    expect(validateScalarValue("basic.birthday", "1999")).toBeNull()
+    expect(validateScalarValue("basic.birthday", "")).toBeNull()
+    expect(validateScalarValue("basic.birthday", "abc")).not.toBeNull()
+  })
+})

@@ -192,7 +192,7 @@ interface Settings {
 
 ```text
 Profile (单例)
-  ├─ basics[7 个 ProfileField]  ─┐
+  ├─ basics[9 个 ProfileField]  ─┐
   └─ intent[3 个 ProfileField]  ─┤ 全部 confirmed 才进入自动填写数据源
 ExperienceEntry[] (education/internship/project/award，各多条)
         ▲

@@ -4,6 +4,7 @@
 import type { ExperienceEntry, FieldMemory, Profile } from "../model/types"
 import {
   AMBIGUOUS_LABELS,
+  AUTOCOMPLETE_MAP,
   ENTRY_BLOCK_TITLES,
   ENTRY_COLUMN_ALIASES,
   SCALAR_VOCABULARY,
@@ -24,10 +25,12 @@ export interface FieldMatch {
   candidates: string[]
   ambiguous: boolean
   conflict: boolean
+  /** P1-3：仅 name/id 弱信号命中（词边界+控件过滤后仍存疑）→ 不确认不填写 */
+  weak?: boolean
   reason?: string
 }
 
-export type PlanAction = "fill" | "confirm" | "missing" | "manual"
+export type PlanAction = "fill" | "confirm" | "missing" | "manual" | "skip"
 
 export interface FillPlanItem {
   match: FieldMatch
@@ -88,13 +91,57 @@ interface Candidate {
   score: number
   exact: boolean
   viaLabel: boolean
+  /** P1-1：仅 name/id 词边界命中（弱信号，置信走 gray 且不进确认） */
+  nameIdSignal?: boolean
+}
+
+const CJK_RE = /[一-鿿]/
+
+/** name/id 词边界切分：camelCase / 下划线 / 连字符 / 点号 → 单词序列 */
+function tokenizeNameId(raw: string): string[] {
+  return raw
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter((t) => t !== "")
+    .map((t) => t.toLowerCase())
+}
+
+/** alias 词序列是否作为连续片段出现在 tokens 中（hasAppliedOtherJob ≠ 命中 job title） */
+function tokensContainSeq(tokens: string[], aliasTokens: string[]): boolean {
+  if (aliasTokens.length === 0 || aliasTokens.length > tokens.length) return false
+  for (let i = 0; i <= tokens.length - aliasTokens.length; i++) {
+    let ok = true
+    for (let j = 0; j < aliasTokens.length; j++) {
+      if (tokens[i + j] !== aliasTokens[j]) {
+        ok = false
+        break
+      }
+    }
+    if (ok) return true
+  }
+  return false
 }
 
 function scalarCandidates(field: ScannedField): Candidate[] {
   const label = field.labelText
-  const nameId = normLabel(field.nameIdPlaceholder)
+  const nameIdRaw = field.nameIdPlaceholder
+  const nameId = normLabel(nameIdRaw)
   const labelStripped = normLabel(label.replace(/[\s*必填]+$/g, ""))
   const out: Candidate[] = []
+
+  // P1-4：HTML autocomplete 标准属性最高优先（110 > label 精确 100）
+  const acTokens = (field.autoComplete ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t !== "")
+  for (const token of acTokens) {
+    const id = AUTOCOMPLETE_MAP[token]
+    if (id && controlMatches(id, field.controlKind)) {
+      out.push({ id, score: 110, exact: true, viaLabel: false })
+      break
+    }
+  }
 
   if (label && !excluded(label)) {
     for (const vocab of SCALAR_VOCABULARY) {
@@ -113,16 +160,30 @@ function scalarCandidates(field: ScannedField): Candidate[] {
           if (rev.length > 0) score = 52
         }
       }
-      if (score > 0) out.push({ id: vocab.id, score, exact, viaLabel: true })
+      // P1-1：非精确（部分包含）命中要求控件类型吻合——
+      // 「是否支持手机端」下拉不再命中 basic.phone、「已投递岗位」勾选框不再命中 intent.position
+      if (score > 0 && (exact || controlMatches(vocab.id, field.controlKind))) {
+        out.push({ id: vocab.id, score, exact, viaLabel: true })
+      }
     }
   }
 
-  // 仅 name/id 信号（无 label 命中时）
+  // 仅 name/id 信号（无 label 命中时）：词边界 + 控件吻合（P1-1）
   if (nameId && out.length === 0) {
+    const tokens = tokenizeNameId(nameIdRaw)
     for (const vocab of SCALAR_VOCABULARY) {
-      const aliases = [...vocab.zh, ...vocab.en].map(normLabel)
-      if (aliases.some((a) => (a.length >= 2 && nameId.includes(a)) || nameId === a)) {
-        out.push({ id: vocab.id, score: 45, exact: false, viaLabel: false })
+      if (!controlMatches(vocab.id, field.controlKind)) continue
+      const hit = [...vocab.zh, ...vocab.en].some((aliasRaw) => {
+        const a = normLabel(aliasRaw)
+        if (CJK_RE.test(a)) return nameId.includes(a)
+        const aliasTokens = aliasRaw
+          .toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter((t) => t !== "")
+        return tokensContainSeq(tokens, aliasTokens)
+      })
+      if (hit) {
+        out.push({ id: vocab.id, score: 45, exact: false, viaLabel: false, nameIdSignal: true })
       }
     }
   }
@@ -237,8 +298,15 @@ export function matchField(field: ScannedField, memory?: FieldMemory | null): Fi
     return { ...base, semanticFieldId: id, confidence: "gray", candidates, reason: "别名部分包含命中" }
   }
 
-  // 仅 name/id 信号（45 分）→ gray
-  return { ...base, semanticFieldId: id, confidence: "gray", candidates, reason: "仅 name/id 信号命中" }
+  // 仅 name/id 信号（45 分）→ gray + weak（P1-3：不进确认面板，直接跳过）
+  return {
+    ...base,
+    semanticFieldId: id,
+    confidence: "gray",
+    candidates,
+    weak: top.nameIdSignal === true,
+    reason: "仅 name/id 信号命中"
+  }
 }
 
 // ---------- 填充计划（T021: FR-014/015/016/017） ----------
@@ -262,6 +330,41 @@ function entriesOfKind(entries: ExperienceEntry[], kind: EntryKind): ExperienceE
   return entries
     .filter((e) => e.kind === kind)
     .sort((a, b) => a.order - b.order)
+}
+
+// ---------- T061：姓名拆分（姓/名两个输入框的常见布局） ----------
+
+const COMPOUND_SURNAMES = [
+  "欧阳", "司马", "上官", "诸葛", "东方", "皇甫", "尉迟", "公孙", "慕容",
+  "长孙", "宇文", "司徒", "鲜于", "轩辕", "令狐", "钟离", "闾丘", "夏侯", "南宫"
+]
+
+/** 把资料库整名拆到「姓」「名」两个输入框；非拆分字段原样返回 */
+function splitNameValue(field: ScannedField, fullName: string): string {
+  const rawLabel = field.labelText.replace(/[\s*必填]+$/g, "")
+  // 合并的「姓名 / 姓 名」单字段 → 整名
+  if (/姓\s*名/.test(rawLabel)) return fullName
+  const labelN = normLabel(rawLabel)
+  const n = field.nameIdPlaceholder.toLowerCase()
+  // 标签与 name/id 都参与判断：国际化表单常见「Last Name/First Name」仅标签、name 为空
+  const surnameRe = /surname|lastname|last[\s_-]?name|family[\s_-]?name/
+  const givenRe = /given[\s_-]?name|firstname|first[\s_-]?name/
+  const isSurname = labelN === "姓" || surnameRe.test(labelN) || surnameRe.test(n)
+  const isGiven = labelN === "名" || givenRe.test(labelN) || givenRe.test(n)
+  if (!isSurname && !isGiven) return fullName
+
+  const value = fullName.trim()
+  if (!value) return value
+  if (/[一-鿿]/.test(value)) {
+    const len = COMPOUND_SURNAMES.some((c) => value.startsWith(c)) ? 2 : 1
+    if (value.length <= len) return isSurname ? value : ""
+    return isSurname ? value.slice(0, len) : value.slice(len)
+  }
+  const parts = value.split(/\s+/)
+  if (parts.length >= 2) {
+    return isSurname ? (parts[parts.length - 1] as string) : parts.slice(0, -1).join(" ")
+  }
+  return value
 }
 
 function textEquivalent(value: string, current: string): boolean {
@@ -291,6 +394,19 @@ export function currentValueOf(field: ScannedField): string {
   return ((el as HTMLInputElement).value ?? "").trim()
 }
 
+/** FR-017 冲突比较用的「页面内容」（P1-2）：radio 取选中项可见文案（value 常为 on/1），
+ * checkbox 的勾选态不是可比内容，返回空串（永不触发冲突确认） */
+function conflictTextOf(field: ScannedField): string {
+  if (field.controlKind === "radio" && field.radioGroup) {
+    const checked = field.radioGroup.find((r) => r.checked)
+    if (!checked) return ""
+    const text = (checked.labels?.[0]?.textContent ?? "").replace(/\s+/g, " ").trim()
+    return text || checked.value || ""
+  }
+  if (field.controlKind === "checkbox") return ""
+  return currentValueOf(field)
+}
+
 export interface PlanOptions {
   memoryBySig?: Map<string, FieldMemory>
   /** 页面预填值与目标不一致时强制覆盖（用户在面板点"覆盖"时用） */
@@ -310,10 +426,11 @@ export function buildFillPlan(
   for (const field of scanned) {
     if (field.manual) {
       // T057：只读控件不填写——仅在匹配到资料字段时上报「需人工」（带字段名），
-      // 匹配不上的只读控件不上报（与 FR-019 的静默过滤保持一致，避免噪音）
+      // 匹配不上的只读控件不上报（与 FR-019 的静默过滤保持一致，避免噪音）；
+      // T062：weak 弱信号同样不上报（否则「我投递错了项目…」这类帮助文本会幻影进需人工）
       if (field.manual === "readonly") {
         const roMatch = matchField(field, null)
-        if (roMatch.semanticFieldId && !roMatch.ambiguous) {
+        if (roMatch.semanticFieldId && !roMatch.ambiguous && !roMatch.weak) {
           items.push({
             match: roMatch,
             action: "manual",
@@ -342,6 +459,10 @@ export function buildFillPlan(
     const match = matchField(field, memory)
 
     if (!match.semanticFieldId && !match.ambiguous) continue
+
+    // P1-2：勾选框不作为标量填写目标——「是否投过其他岗/是否国内手机」这类
+    // 是/否问卷题资料值无法作答；其选中态（value "on"）也永不进 FR-017 冲突确认
+    if (field.controlKind === "checkbox") continue
 
     if (match.semanticFieldId) covered.add(match.semanticFieldId)
 
@@ -405,6 +526,17 @@ export function buildFillPlan(
       continue
     }
 
+    // P1-3：仅 name/id 弱信号 → 跳过（报告记「未找到」+原因），不占用确认面板——
+    // 成熟插件的共同做法：拿不准的低置信匹配宁可不问也不乱报（73 项确认 → 个位数）
+    if (match.weak) {
+      items.push({
+        match,
+        action: "skip",
+        reason: "仅 name/id 弱信号命中，置信不足未填写（可在资料页补录该字段）"
+      })
+      continue
+    }
+
     const id = match.semanticFieldId
     const pf = profileValue(profile, id)
     const memoryValue =
@@ -420,10 +552,17 @@ export function buildFillPlan(
       continue
     }
 
-    const value = memoryValue ?? (pf as { value: string }).value
+    const value0 = memoryValue ?? (pf as { value: string }).value
+    // T061：姓名拆分字段（姓/名）按页面标签切分；记忆值优先（用户确认过的拆分结果）
+    const value =
+      id === "basic.name" && !memoryValue ? splitNameValue(field, value0) : value0
+    if (id === "basic.name" && value.trim() === "") {
+      items.push({ match, action: "missing", reason: "资料库姓名无法拆分出该部分" })
+      continue
+    }
 
-    // FR-017 预填冲突
-    const current = currentValueOf(field)
+    // FR-017 预填冲突（P1-2：radio 按选中项可见文案比较，checkbox 已在上方排除）
+    const current = conflictTextOf(field)
     const isPrefilled = current !== ""
     const conflict =
       isPrefilled && !options.allowConflict && !textEquivalent(value, current)

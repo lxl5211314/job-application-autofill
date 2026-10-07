@@ -181,6 +181,13 @@
 - [x] T055 Real-resume hardening in `src/core/resume/extract.ts` + `tests/unit/resume-exotic.test.ts`: 归一化剔除控制字符/全角空格/长破折号、康熙部首与兼容字形归一、无「姓名：」标签的首行姓名回退、日期残骸走无日期条目回退
 - [x] T056 Broken-ToUnicode digit repair in `src/core/resume/pdf.ts`: `getTextContent` 发现 NUL → 关归一化重取 + `getOperatorList()` 锁步对齐（合成空格不消费字形，desync 必须为 0），数字按 `digit = cid - base` 还原（base 由坏字形 cid 跨度推导，候选按合法日期数打分），对齐失败/cid 越界/无合法日期整页回退原文本（宁缺勿错）；夹具 `tests/fixtures/resume-broken.pdf` + `resume.test.ts` 回归
 - [x] T057 Readonly-field reporting in `src/core/matching/scan.ts` + `match.ts`: 新增 `scanReadonlyFields`（FR-019 不变——`scanDocument` 仍排除只读，不参与填写），`buildFillPlan` 对匹配到资料字段的只读控件上报 `manual`（reason=「只读控件（需在页面弹层中选择）」），匹配不上的不上报；签名加 `|ro` 后缀防撞——避免只读弹层控件静默消失被误报成「未找到」（`matching.test.ts` T057 块）
+- [x] T058 P1 matching-noise reduction in `src/core/matching/{vocabulary,scan,match}.ts`（借鉴成熟插件调研，确认面板 73 项 → 个位数）: ① name/id 信号改词边界匹配 + 控件类型过滤（`hasAppliedOtherJob` 不再命中岗位、`isDomesticMobile` 不再命中手机号）；② label 部分包含命中同样要求控件吻合；③ checkbox 不作标量填写目标且勾选态永不进 FR-017 冲突确认、radio 冲突按可见文案比较（value=on/1 不误报）；④ 仅 name/id 弱信号 → `action:"skip"`（报告归「未找到」+原因，不进确认面板）；⑤ 接入 HTML `autocomplete` 属性最高优先信号（`AUTOCOMPLETE_MAP`：name/email/tel → 白名单直填 high）；`confirm-routing.test.ts` + `matching.test.ts` T058 块（123 tests）
+- [x] T059 P2 confirm-panel redesign in `src/core/ui/confirm-panel.ts`: 卡片标题改可读中文（`planReportLabel` 语义字段名优先 + 「页面字段：」副行降级展示原始标识）、按原因分组（歧义/页面冲突/选项措辞/待核对/其他，各带计数）、头部追加本次统计行（已填/未找到/需人工）
+- [x] T060 not-found 中文化 in `src/contents/autofill.ts`: `collectReportItems` 的 `not_found` 条目 `label` 从原始 ID 改 `semanticFieldLabel(id)`（`basic.school` → 学校），结果面板不再暴露英文内部 ID
+- [x] T061 split-name fill in `src/core/matching/match.ts` + `vocabulary.ts`: 词表 `basic.name` 增单字别名「姓/名」（仅精确命中，部分包含仍要求 ≥2 字防误伤）与 surname/first name 等英文；`splitNameValue` 按页面标签把资料库整名拆到 姓/名 两个输入框（复姓表：欧阳/司马…2 字；英文名 按空格姓取末词），合并「姓名」单字段不拆，记忆值优先；标签与 name/id **都**参与拆分判断（「Last Name/First Name」仅标签、name 为空也拆，「Full Name」整名不拆）（`matching.test.ts` T061 块，含英文标签用例）
+- [x] T062 readonly-weak suppression in `src/core/matching/match.ts`: 只读上报再加 `!roMatch.weak` 条件——仅 name/id 弱信号的只读控件（「我投递错了项目，可以更换吗？」类帮助文本）不再幻影进「需人工」
+- [x] T063 new scalar fields `basic.gender` + `basic.birthday`（校招个人信息区标配，原先不在 10 字段里导致整块静默）: `types.ts` BASIC_FIELD_IDS 扩到 9（表单/草稿/校验链路全泛型自动跟随）、词表 + `AUTOCOMPLETE_MAP`(sex/bday) + 性别等价表（男/男性/male）、`validation.ts`（男/女枚举 + 宽松日期）、简历锚点「性别：」「出生年月：」+ 归一化（Male→男，映射不上不抽取）、只读出生日期弹层走 T057 上报；`matching.test.ts`/`validation.test.ts`/`resume.test.ts` 新增 10 用例
+- [x] T064 scroll-triggered rescan in `src/contents/autofill.ts`: `observeRescan` 增 capture 阶段 scroll 监听（scroll 不冒泡）与 mutation 同防抖复扫——分步/懒加载表单（学历、求职意向常滚动到才渲染）在补扫窗口内滚动即可补填（预算仍受 3s+5s 硬截止约束）
 
 ---
 
