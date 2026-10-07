@@ -10,6 +10,9 @@ import { fieldSignature } from "./signature"
 
 export type ManualReason = "password" | "file" | "submit" | "captcha" | "agreement" | "readonly"
 
+/** T065：可驱动的交互控件类型——弹层下拉（combobox）与日历面板（date） */
+export type WidgetKind = "combobox" | "date"
+
 export interface ScannedField {
   element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement
   controlKind: ControlKind
@@ -23,6 +26,8 @@ export interface ScannedField {
   optionTexts?: string[]
   radioGroup?: HTMLInputElement[]
   manual?: ManualReason
+  /** T065：widget 驱动标记——执行期由 fillWidgetField 点选弹层，失败降级「需人工」 */
+  widget?: WidgetKind
   prefilled: boolean
   signature: string
 }
@@ -146,6 +151,47 @@ function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text))
 }
 
+// ---------- T065: 交互控件（widget）识别 ----------
+
+/** 占位文案（回显空值的判断基准） */
+const TRIGGER_PLACEHOLDER_RE =
+  /^(?:请选择|点击选择|请点选|请选择日期|请选择时间|选择日期|选择时间|选择|待选择|点击输入|please select|select\d*|placeholder)/i
+
+/** 自定义下拉触发器的当前回显文本（占位文案/placeholder 视为空） */
+export function widgetTriggerText(el: Element): string {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    return cleanText(el.value)
+  }
+  const raw = cleanText(el.textContent)
+  if (raw === "") return ""
+  if (TRIGGER_PLACEHOLDER_RE.test(raw)) return ""
+  const phEl = el.querySelector('[class*="placeholder"]')
+  if (phEl && cleanText(phEl.textContent) === raw) return ""
+  if (cleanText(el.getAttribute("placeholder")) === raw) return ""
+  return raw
+}
+
+const DATE_WIDGET_RE = /日期|出生|生日|年月日|毕业时间|入职时间|选择时间|date|birth|calendar|picker/i
+const COMBO_WIDGET_RE = /请选择|点击选择|请点选|下拉|选择框|select|dropdown|picker|combobox|listbox/i
+
+/** T065：只读输入是否可由 widget 驱动（日历面板 / 弹层下拉） */
+function detectWidget(el: AnyControl, labelText: string): WidgetKind | undefined {
+  const input = el as HTMLInputElement
+  const type = (input.type ?? "").toLowerCase()
+  if (type === "date" || type === "month") return "date"
+  const sig = [
+    labelText,
+    el.getAttribute("name") ?? "",
+    el.getAttribute("id") ?? "",
+    input.placeholder ?? "",
+    el.getAttribute("aria-label") ?? "",
+    (el as HTMLElement).className?.toString?.() ?? ""
+  ].join(" ")
+  if (DATE_WIDGET_RE.test(sig)) return "date"
+  if (el.getAttribute("aria-haspopup") || COMBO_WIDGET_RE.test(sig)) return "combobox"
+  return undefined
+}
+
 function detectManual(el: Element, labelText: string): ManualReason | undefined {
   const tag = el.tagName.toLowerCase()
   const type = ((el as HTMLInputElement).type ?? "").toLowerCase()
@@ -180,6 +226,8 @@ function controlKindOf(el: AnyControl): ControlKind {
 function prefilledOf(el: AnyControl, kind: ControlKind, group?: HTMLInputElement[]): boolean {
   if (kind === "radio" && group) return group.some((r) => r.checked)
   if (kind === "select") {
+    // 自定义下拉触发器（div[role=combobox]）不是 HTMLSelectElement：看回显文本
+    if (!(el instanceof HTMLSelectElement)) return widgetTriggerText(el) !== ""
     const select = el as HTMLSelectElement
     return select.value !== ""
   }
@@ -206,6 +254,7 @@ function makeField(params: {
   optionTexts?: string[]
   radioGroup?: HTMLInputElement[]
   manual?: ManualReason
+  widget?: WidgetKind
   prefilled: boolean
 }): ScannedField {
   const signature = fieldSignature({
@@ -320,6 +369,9 @@ export function scanDocument(doc: Document = document): ScannedField[] {
     processed.add(el)
   }
 
+  // T065：自定义下拉触发器（原生 input/select 扫描之外）
+  scanCustomTriggers(doc, processed, results)
+
   return results
 }
 
@@ -354,6 +406,7 @@ export function scanReadonlyFields(doc: Document = document): ScannedField[] {
       rowIndex: cellRowIndex,
       optionTexts: optionTextsOf(el),
       manual: "readonly",
+      widget: detectWidget(el, labelText),
       prefilled: prefilledOf(el, kind)
     })
     // 只读条目签名加后缀：避免与同名可编辑字段撞签名（itemsBySig/确认回写隔离）
@@ -361,4 +414,65 @@ export function scanReadonlyFields(doc: Document = document): ScannedField[] {
     results.push(field)
   }
   return results
+}
+
+// ---------- T065: 自定义下拉触发器扫描（div[role=combobox] 等非原生控件） ----------
+
+function labelOfTrigger(el: Element, doc: Document): string {
+  const aria = cleanText(el.getAttribute("aria-label"))
+  if (aria) return aria
+  const id = el.getAttribute("id")
+  if (id) {
+    // 不依赖 CSS.escape（jsdom/旧环境未挂载全局 CSS）
+    const lbl = Array.from(doc.querySelectorAll("label[for]")).find(
+      (l) => l.getAttribute("for") === id
+    )
+    if (lbl) return cleanText(lbl.textContent)
+  }
+  const wrap = el.closest("label")
+  if (wrap) return cleanText(wrap.textContent)
+  const labelledBy = el.getAttribute("aria-labelledby")
+  if (labelledBy) {
+    for (const refId of labelledBy.split(/\s+/)) {
+      const ref = doc.getElementById(refId)
+      const text = cleanText(ref?.textContent)
+      if (text) return text
+    }
+  }
+  // placeholder 兜底（「请选择」类占位作标签时匹配不上词表，由 plan 静默）
+  return cleanText(el.getAttribute("placeholder")) || cleanText(el.querySelector('[class*="placeholder"]')?.textContent)
+}
+
+function scanCustomTriggers(doc: Document, processed: Set<Element>, results: ScannedField[]): void {
+  const triggers = doc.querySelectorAll(
+    '[role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="list"]'
+  )
+  for (const t of Array.from(triggers)) {
+    if (processed.has(t)) continue
+    if (t.closest('[id^="job-autofill-"]')) continue
+    if (isHidden(t)) continue
+    if (t.hasAttribute("disabled")) continue
+    // 原生控件走主循环（可编辑）或 scanReadonlyFields（只读）
+    if (t.matches("input, select, textarea, button")) continue
+
+    const labelText = labelOfTrigger(t, doc)
+    const nameId = [t.getAttribute("name") ?? "", t.getAttribute("id") ?? "", t.getAttribute("placeholder") ?? ""]
+      .sort((a, b) => b.length - a.length)[0] ?? ""
+
+    results.push(
+      makeField({
+        element: t as ScannedField["element"],
+        controlKind: "select",
+        labelText,
+        nameIdPlaceholder: nameId,
+        autoComplete: autoCompleteOf(t),
+        blockTitle: findBlockTitle(t, doc),
+        columnLabel: "",
+        rowIndex: -1,
+        widget: "combobox",
+        prefilled: widgetTriggerText(t) !== ""
+      })
+    )
+    processed.add(t)
+  }
 }

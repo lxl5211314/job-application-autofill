@@ -104,7 +104,7 @@ npm install          # postinstall 自动复制 pdf.js worker → resources/pdf.
 npm run dev          # 开发构建（热更新）→ build/chrome-mv3-dev
 npm run build        # 生产构建 → build/chrome-mv3-prod
 npm run package      # 打包 zip → build/chrome-mv3-prod.zip
-npm test             # Vitest 单元测试（jsdom，140 项）
+npm test             # Vitest 单元测试（jsdom，159 项）
 npm run test:watch   # 监听模式
 npm run lint         # ESLint（含 scripts/*.mjs）
 npx tsc --noEmit     # TypeScript 严格类型检查
@@ -253,7 +253,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ## 测试与验收
 
-### 单元测试（Vitest，140 项 / 9 文件）
+### 单元测试（Vitest，159 项 / 10 文件）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -344,7 +344,7 @@ scripts/
   copy-pdf-worker.mjs      # postinstall 复制 pdf.js worker
 specs/                     # spec-kit 规格（spec/data-model/contracts/tasks/quickstart）
 docs/usage.md              # 使用指南（安装/建档/填写/确认/记忆/排查）
-tests/unit/                # Vitest 单测（140 项）
+tests/unit/                # Vitest 单测（159 项）
 tests/fixtures/            # 合成夹具（HTML 表单页、PDF/txt 简历）
 ```
 

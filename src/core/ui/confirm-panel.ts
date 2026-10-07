@@ -2,7 +2,8 @@
 // 候选值逐字来自页面选项（select/radio）或资料库值；点选 → 填入页面 + confirm:resolve；
 // 跳过 → 不填不记忆（FR-023）
 
-import { fillField } from "../filling/fill"
+import { fillField, type FillResult } from "../filling/fill"
+import { fillWidgetField } from "../filling/widgets"
 import type { ActiveSession } from "../filling/session-state"
 import { planReportLabel, type FillPlanItem } from "../matching/match"
 import { sendToBackground } from "../messaging"
@@ -186,16 +187,23 @@ export function renderConfirmPanel(session: ActiveSession): void {
           ? "option"
           : "text"
 
+      // T065：widget 字段（日历/弹层下拉）走异步驱动；其余保持同步 fillField
       const pick = (value: string): void => {
-        const result = fillField(item.match.field, value, { allowConflict: true })
-        if (!result.filled) {
-          card.append(el("div", { className: "ambiguous-note" }, [`填入失败（${result.reason}）`]))
+        const done = (result: FillResult): void => {
+          if (!result.filled) {
+            card.append(el("div", { className: "ambiguous-note" }, [`填入失败（${result.reason}）`]))
+            return
+          }
+          const applied = result.appliedValue ?? value
+          markResolved(session, item, applied)
+          resolve(session, item, { kind: "pick", value: applied }, valueKind)
+          rerender()
+        }
+        if (item.match.field.widget) {
+          void fillWidgetField(item.match.field, value, { allowConflict: true }).then(done)
           return
         }
-        const applied = result.appliedValue ?? value
-        markResolved(session, item, applied)
-        resolve(session, item, { kind: "pick", value: applied }, valueKind)
-        rerender()
+        done(fillField(item.match.field, value, { allowConflict: true }))
       }
 
       const options = el("div", { className: "confirm-options" })

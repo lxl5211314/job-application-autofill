@@ -477,7 +477,7 @@ describe("T063 性别/出生日期字段（个人信息区标配）", () => {
     expect(plan.items.filter((i) => i.action === "confirm")).toHaveLength(0)
   })
 
-  it("出生日期只读弹层 → manual（需人工，带字段名，T057 路径）", () => {
+  it("出生日期只读弹层 → fill（T065 日历驱动；执行失败时执行期降级 manual）", () => {
     const doc = new DOMParser().parseFromString(
       `<form><label for="bd">出生日期</label><input id="bd" value="1999-09-01" readonly /></form>`,
       "text/html"
@@ -488,8 +488,8 @@ describe("T063 性别/出生日期字段（个人信息区标配）", () => {
       []
     )
     const item = plan.items.find((i) => i.match.semanticFieldId === "basic.birthday")
-    expect(item?.action).toBe("manual")
-    expect(item?.reason).toContain("只读")
+    expect(item?.action).toBe("fill")
+    expect(item?.match.field.widget).toBe("date")
   })
 
   it("资料库无性别 → 页面性别字段报 missing（不再整块静默）", () => {

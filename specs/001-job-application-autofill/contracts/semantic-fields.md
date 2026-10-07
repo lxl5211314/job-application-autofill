@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | `basic.name` | text | 姓名、名字、真实姓名、申请人姓名、姓 名、姓、名 | name, full name, applicant name, surname, first name, given name | 与"联系人姓名"区分（后者不匹配）；「姓/名」两输入框布局按 `splitNameValue` 拆分（T061，复姓 2 字） |
 | `basic.gender` | radio/select/text | 性别 | gender, sex | T063；值归一化 男/女；选项等价 男↔男性↔Male（`GENDER_EQUIVALENCES`）；简历锚点「性别：」 |
-| `basic.birthday` | text/select | 出生日期、出生年月、出生年月日、出生时间、生日 | birthday, birth date, date of birth, dob | T063；宽松格式 1999 / 1999-09 / 1999年9月；只读日期弹层走 T057 上报「需人工」 |
+| `basic.birthday` | text/select | 出生日期、出生年月、出生年月日、出生时间、生日 | birthday, birth date, date of birth, dob | T063；宽松格式 1999 / 1999-09 / 1999年9月；T065 只读日期弹层标 `widget=date` 由日历驱动填写（失败执行期降级「需人工」），`dateEquivalent` 免冲突误报 |
 | `basic.phone` | tel/text | 手机号、手机号码、联系电话、移动电话、手机 | mobile, phone, cell, telephone | 归一化：去空格/连字符/+86 前缀 |
 | `basic.email` | email/text | 邮箱、电子邮箱、电子邮件、Email 地址 | email, e-mail | 需含 `@` 形态时优先 email 类型控件 |
 | `basic.school` | text | 学校、毕业院校、就读学校、最高学历毕业学校、学校名称 | school, university, college, institution | 教育经历条目内同名字段由条目负责 |

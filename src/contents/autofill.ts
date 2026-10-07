@@ -3,6 +3,7 @@
 // 主窗口 3s + 补扫 ≤5s，research R5/R8）→ FillReport（掩码）→ report:save → 结果面板
 
 import { fillField } from "../core/filling/fill"
+import { fillWidgetField } from "../core/filling/widgets"
 import { setActiveSession, type ActiveSession } from "../core/filling/session-state"
 import { maskValue } from "../core/model/mask"
 import type {
@@ -83,14 +84,19 @@ function reportItemFromPlan(item: FillPlanItem): FillReportItem {
   }
 }
 
-/** 执行计划中的 fill 项；fillField 意外失败（如扫描后页面被改）转 needs_confirm */
-function executeFills(items: FillPlanItem[]): void {
+/** 执行计划中的 fill 项；fillField 意外失败（如扫描后页面被改）转 needs_confirm
+ *  T065：widget 字段（日历/弹层下拉）走 fillWidgetField 异步驱动，
+ *  交互失败（reason="widget"）降级「需人工」——不静默丢字段 */
+async function executeFills(items: FillPlanItem[]): Promise<void> {
   for (const item of items) {
     if (item.action !== "fill" || item.value === undefined) continue
-    const result = fillField(item.match.field, item.value)
+    const field = item.match.field
+    const result = field.widget
+      ? await fillWidgetField(field, item.value)
+      : fillField(field, item.value)
     if (result.filled) continue
     item.action =
-      result.reason === "blacklist"
+      result.reason === "blacklist" || result.reason === "widget"
         ? "manual"
         : result.reason === "conflict" || result.reason === "no_match"
           ? "confirm"
@@ -102,7 +108,9 @@ function executeFills(items: FillPlanItem[]): void {
           ? "选项措辞与资料库不一致，不自动填"
           : result.reason === "blacklist"
             ? "非填写区控件，需人工处理"
-            : `无法填写（${result.reason ?? "unknown"}）`
+            : result.reason === "widget"
+              ? "控件交互失败（弹层未打开或未找到目标项），需人工处理"
+              : `无法填写（${result.reason ?? "unknown"}）`
   }
 }
 
@@ -166,11 +174,13 @@ async function rescanRound(session: ActiveSession): Promise<void> {
   if (fresh.length === 0) return
   markProcessed(fresh)
 
-  const signatures = fresh.filter((f) => !f.manual).map((f) => f.signature)
+  const signatures = fresh
+    .filter((f) => !f.manual || (f.manual === "readonly" && f.widget))
+    .map((f) => f.signature)
   const memoryBySig = await lookupMemory(signatures, session)
 
   const plan = buildFillPlan(fresh, session.profile, session.entries, { memoryBySig })
-  executeFills(plan.items)
+  await executeFills(plan.items)
 
   for (const item of plan.items) {
     session.executed.push(item)
@@ -278,12 +288,14 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
   }
   setActiveSession(session)
 
-  const signatures = scanned.filter((f) => !f.manual).map((f) => f.signature)
+  const signatures = scanned
+    .filter((f) => !f.manual || (f.manual === "readonly" && f.widget))
+    .map((f) => f.signature)
   const memoryBySig = await lookupMemory(signatures, session)
 
   emit(sessionId, "filling")
   const plan = buildFillPlan(scanned, profile, entries, { memoryBySig })
-  executeFills(plan.items)
+  await executeFills(plan.items)
 
   for (const item of plan.items) {
     session.executed.push(item)

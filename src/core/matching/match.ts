@@ -13,8 +13,10 @@ import {
   semanticFieldLabel
 } from "./vocabulary"
 import { normLabel } from "./signature"
+import { dateEquivalent } from "../model/date"
 import type { EntryKind } from "../model/types"
 import type { ScannedField } from "./scan"
+import { widgetTriggerText } from "./scan"
 
 export type Confidence = "high" | "gray" | "low"
 
@@ -371,6 +373,8 @@ function textEquivalent(value: string, current: string): boolean {
   const a = normLabel(value)
   const b = normLabel(current)
   if (a === b) return true
+  // T065：日期等价（1999-09-01 ≡ 1999/9/1 ≡ 1999年9月1日）
+  if (dateEquivalent(value, current)) return true
   // 电话/纯数字宽松比较
   const da = a.replace(/\D/g, "")
   const db = b.replace(/\D/g, "")
@@ -380,6 +384,13 @@ function textEquivalent(value: string, current: string): boolean {
 
 export function currentValueOf(field: ScannedField): string {
   const el = field.element
+  // T065：自定义下拉触发器（div）不是 HTMLSelectElement，读回显文本
+  if (field.widget === "combobox") {
+    const raw = widgetTriggerText(el)
+    if (raw !== "") return raw
+    const input = el instanceof HTMLInputElement ? el : el.querySelector("input")
+    return (input?.value ?? "").replace(/\s+/g, " ").trim()
+  }
   if (field.controlKind === "select") {
     const sel = el as HTMLSelectElement
     return sel.value === "" ? "" : (sel.selectedOptions[0]?.textContent ?? "").trim()
@@ -413,6 +424,17 @@ export interface PlanOptions {
   allowConflict?: boolean
 }
 
+/** T068：选项等价比较用实时 options（级联下拉子级在扫描后会被父级 change 重建） */
+function liveOptionTexts(field: ScannedField): string[] {
+  if (field.controlKind === "select" && field.element instanceof HTMLSelectElement) {
+    const live = Array.from(field.element.options)
+      .filter((o) => o.value !== "")
+      .map((o) => (o.textContent ?? "").replace(/\s+/g, " ").trim())
+    if (live.length > 0) return live
+  }
+  return field.optionTexts ?? []
+}
+
 export function buildFillPlan(
   scanned: ScannedField[],
   profile: Profile,
@@ -424,7 +446,10 @@ export function buildFillPlan(
   const memoryBySig = options.memoryBySig
 
   for (const field of scanned) {
-    if (field.manual) {
+    // T065：只读但可驱动（日历/弹层下拉）→ 走正常标量流程，
+    // 执行期由 fillWidgetField 点选弹层；交互失败再降级「需人工」
+    const drivable = field.manual === "readonly" && field.widget !== undefined
+    if (field.manual && !drivable) {
       // T057：只读控件不填写——仅在匹配到资料字段时上报「需人工」（带字段名），
       // 匹配不上的只读控件不上报（与 FR-019 的静默过滤保持一致，避免噪音）；
       // T062：weak 弱信号同样不上报（否则「我投递错了项目…」这类帮助文本会幻影进需人工）
@@ -574,8 +599,9 @@ export function buildFillPlan(
     }
 
     // 选项类：措辞不一致 → confirm（gray）
-    if (field.controlKind === "select" || field.controlKind === "radio") {
-      const optionsList = field.optionTexts ?? []
+    // T065：widget 驱动控件在扫描期拿不到选项（弹层未打开），等价匹配由驱动层在点选时做
+    if ((field.controlKind === "select" || field.controlKind === "radio") && !field.widget) {
+      const optionsList = liveOptionTexts(field)
       const equiv = findEquivalentOption(value, optionsList)
       if (!equiv) {
         items.push({
