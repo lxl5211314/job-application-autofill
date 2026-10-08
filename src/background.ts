@@ -199,7 +199,15 @@ async function handleMessage(request: Request): Promise<Response | undefined> {
     }
 
     case "autofill:event": {
-      // fire-and-forget 进度通知，应答即可
+      // fire-and-forget 进度通知：转发给存活的 popup 步骤清单端口后应答
+      const payload = request.payload as Record<string, unknown>
+      for (const port of progressPorts) {
+        try {
+          port.postMessage(payload)
+        } catch {
+          progressPorts.delete(port)
+        }
+      }
       return ok({})
     }
 
@@ -241,6 +249,17 @@ async function handleMessage(request: Request): Promise<Response | undefined> {
       return undefined
   }
 }
+
+// T071: popup 步骤清单——autofill:event 经端口实时转发（消息通道只应答不广播）
+const progressPorts = new Set<chrome.runtime.Port>()
+
+chrome.runtime.onConnect.addListener((port: chrome.runtime.Port) => {
+  if (port.name !== "autofill-progress") return
+  progressPorts.add(port)
+  port.onDisconnect.addListener(() => {
+    progressPorts.delete(port)
+  })
+})
 
 chrome.runtime.onMessage.addListener((request: unknown, _sender, sendResponse) => {
   const req = request as Request

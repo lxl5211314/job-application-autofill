@@ -34,7 +34,7 @@ type Response<T = unknown> =
 | `resume:confirm` | options → background | `{ draftId, importMode, fields, entries }` → `{}` | 确认导入（FR-007/010），后台执行合并写入 |
 | `resume:discard` | options → background | `{ draftId }` → `{}` | 丢弃草稿 |
 | `autofill:run` | popup → content（经 background 路由到当前标签页） | `{ startedAt }` → `{ sessionId }` | 触发一键填写会话（FR-011） |
-| `autofill:event` | content → popup/options（若有存活监听者） | `{ sessionId, phase: "scanning"\|"filling"\|"done", report?: FillReport }` → `{}` | 会话进度通知（fire-and-forget） |
+| `autofill:event` | content → background → **popup 端口 `autofill-progress` 转发**（消息通道本身只应答，T071） | `{ sessionId, phase: "scanning"\|"filling"\|"done", report?: FillReport, progress?: { done, total, current?, matched?, paused? } }` → `{}` | 会话进度通知（fire-and-forget）；`progress` 为填写实时进度（done/total 跨补扫轮累计，paused=用户已在页面面板暂停） |
 | `confirm:resolve` | content → background | `{ sessionId, signature, choice: { kind: "pick", value } \| { kind: "skip" }, semanticFieldId? }` → `{}` | 确认面板结果落地：`pick` → 填入 + 写记忆；`skip` → 仅填入本次、不写记忆（FR-023） |
 | `llm:match` | content → background | `{ fields: LlmMatchField[] }` → `LlmMatchResult[]` | 灰区字段批量语义判定；未开启 LLM 时返回 `{ available: false }`，调用方走规则回退（research R4/R7）**【v1.1 预留，第一版不注册此消息，spec FR-028】** |
 | `llm:rewrite` | options/content → background | `{ text, targetHint }` → `{ text }` | 内容改写（需 `llmRewriteEnabled`，用户主动触发）**【v1.1 预留，第一版不注册此消息，spec FR-028】** |

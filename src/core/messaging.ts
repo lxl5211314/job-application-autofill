@@ -70,6 +70,8 @@ export interface MessageMap {
       sessionId: string
       phase: "scanning" | "filling" | "done"
       report?: FillReport
+      /** P2: 填写中的实时进度（done/total 跨补扫轮累计；paused=用户已暂停） */
+      progress?: { done: number; total: number; current?: string; matched?: number; paused?: boolean }
     }
     res: Record<string, never>
   }

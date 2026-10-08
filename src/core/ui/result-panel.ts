@@ -134,3 +134,77 @@ export function renderResultPanel(report: FillReport): void {
 
   panel.root.replaceChildren(header, summary, list, footer)
 }
+
+// ---------- P2: 实时进度面板（填写期间占位，finalize 后被 renderResultPanel 覆盖） ----------
+
+export interface ProgressView {
+  done: number
+  total: number
+  current?: string
+  paused?: boolean
+  /** 匹配到的计划项总数（含确认/未找到，供头部一次展示） */
+  matched?: number
+}
+
+/** 渲染（或复用）右下角实时进度面板；与结果面板共用宿主，最终渲染自动覆盖 */
+export function renderProgressPanel(view: ProgressView): void {
+  const panel = createPanel(PANEL_ID)
+
+  const header = document.createElement("h3")
+  const title = document.createElement("span")
+  title.textContent = view.paused ? "已暂停" : "正在填写…"
+  header.append(title)
+
+  const section = document.createElement("div")
+  section.className = "panel-section"
+
+  const line = document.createElement("div")
+  line.textContent = view.paused
+    ? `已填 ${view.done}/${view.total}，剩余字段归入「需人工」`
+    : `已填 ${view.done}/${view.total}${view.matched !== undefined ? ` · 匹配 ${view.matched} 项` : ""}`
+  section.appendChild(line)
+
+  if (!view.paused && view.current) {
+    const cur = document.createElement("div")
+    cur.style.color = "#6b7280"
+    cur.style.fontSize = "12px"
+    cur.style.marginTop = "2px"
+    cur.textContent = `当前：${view.current}`
+    section.appendChild(cur)
+  }
+
+  const bar = document.createElement("div")
+  bar.className = "panel-progress"
+  const fillBar = document.createElement("div")
+  fillBar.className = "panel-progress-fill"
+  const pct = view.total > 0 ? Math.round((view.done / view.total) * 100) : 0
+  fillBar.style.width = `${pct}%`
+  if (view.paused) fillBar.style.background = "#9ca3af"
+  bar.appendChild(fillBar)
+  section.appendChild(bar)
+
+  const footer = document.createElement("div")
+  footer.className = "panel-section"
+  if (view.paused) {
+    const note = document.createElement("div")
+    note.style.color = "#6b7280"
+    note.style.fontSize = "11px"
+    note.textContent = "已暂停：本次不再自动填写任何字段。"
+    footer.appendChild(note)
+  } else {
+    const pauseBtn = document.createElement("button")
+    pauseBtn.type = "button"
+    pauseBtn.className = "remember-btn"
+    pauseBtn.textContent = "暂停（剩余转需人工）"
+    pauseBtn.title = "停止自动填写，剩余字段归入「需人工」由你自己操作"
+    pauseBtn.addEventListener("click", () => {
+      const session = getActiveSession()
+      if (session) session.paused = true
+      pauseBtn.textContent = "已暂停"
+      pauseBtn.disabled = true
+    })
+    footer.appendChild(pauseBtn)
+  }
+
+  panel.root.replaceChildren(header, section, footer)
+}

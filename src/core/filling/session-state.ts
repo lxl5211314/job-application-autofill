@@ -27,6 +27,10 @@ export interface ActiveSession {
   /** 最终报告（reportItems 与其 items 为同一数组引用） */
   report: FillReport | null
   coveredIds: Set<string>
+  /** P2: 暂停标记（进度面板按钮置位，executeFills 在填写间隙读取） */
+  paused: boolean
+  /** P2: 跨补扫轮累计进度（进度面板/事件转发共用） */
+  progress: { done: number; total: number }
 }
 
 let active: ActiveSession | null = null

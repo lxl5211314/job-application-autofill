@@ -2,8 +2,7 @@
 // scan → memory:lookup → match → fill → MutationObserver 补扫（300ms 防抖，
 // 主窗口 3s + 补扫 ≤5s，research R5/R8）→ FillReport（掩码）→ report:save → 结果面板
 
-import { fillField } from "../core/filling/fill"
-import { fillWidgetField } from "../core/filling/widgets"
+import { executeFills, type FillProgress, type ExecuteContext } from "../core/filling/execute"
 import { setActiveSession, type ActiveSession } from "../core/filling/session-state"
 import { maskValue } from "../core/model/mask"
 import type {
@@ -17,7 +16,7 @@ import { scanDocument, scanReadonlyFields, type ScannedField } from "../core/mat
 import { semanticFieldLabel } from "../core/matching/vocabulary"
 import { sendToBackground, ok, type Request, type Response } from "../core/messaging"
 import { showConfirmPanel } from "../core/ui/confirm-panel"
-import { renderResultPanel } from "../core/ui/result-panel"
+import { renderProgressPanel, renderResultPanel } from "../core/ui/result-panel"
 
 export const config = {
   matches: ["http://*/*", "https://*/*"],
@@ -43,9 +42,10 @@ function newReportId(): string {
 function emit(
   sessionId: string,
   phase: "scanning" | "filling" | "done",
-  report?: FillReport
+  report?: FillReport,
+  progress?: { done: number; total: number; current?: string; matched?: number; paused?: boolean }
 ): void {
-  void sendToBackground("autofill:event", { sessionId, phase, report }).catch(() => {
+  void sendToBackground("autofill:event", { sessionId, phase, report, progress }).catch(() => {
     // fire-and-forget：popup 可能已关闭
   })
 }
@@ -84,33 +84,27 @@ function reportItemFromPlan(item: FillPlanItem): FillReportItem {
   }
 }
 
-/** 执行计划中的 fill 项；fillField 意外失败（如扫描后页面被改）转 needs_confirm
- *  T065：widget 字段（日历/弹层下拉）走 fillWidgetField 异步驱动，
- *  交互失败（reason="widget"）降级「需人工」——不静默丢字段 */
-async function executeFills(items: FillPlanItem[]): Promise<void> {
-  for (const item of items) {
-    if (item.action !== "fill" || item.value === undefined) continue
-    const field = item.match.field
-    const result = field.widget
-      ? await fillWidgetField(field, item.value)
-      : fillField(field, item.value)
-    if (result.filled) continue
-    item.action =
-      result.reason === "blacklist" || result.reason === "widget"
-        ? "manual"
-        : result.reason === "conflict" || result.reason === "no_match"
-          ? "confirm"
-          : "missing"
-    item.reason =
-      result.reason === "conflict"
-        ? "页面已有内容与资料库不一致，不覆盖（FR-017）"
-        : result.reason === "no_match"
-          ? "选项措辞与资料库不一致，不自动填"
-          : result.reason === "blacklist"
-            ? "非填写区控件，需人工处理"
-            : result.reason === "widget"
-              ? "控件交互失败（弹层未打开或未找到目标项），需人工处理"
-              : `无法填写（${result.reason ?? "unknown"}）`
+/** P2: 进度回调——渲染页面实时进度面板 + 转发 autofill:event（popup 步骤清单用） */
+function progressCtx(session: ActiveSession, matched: number): ExecuteContext {
+  return {
+    counter: session.progress,
+    isPaused: () => session.paused,
+    onProgress: (p: FillProgress): void => {
+      renderProgressPanel({
+        done: p.done,
+        total: p.total,
+        current: p.current,
+        paused: session.paused,
+        matched
+      })
+      emit(session.sessionId, "filling", undefined, {
+        done: p.done,
+        total: p.total,
+        current: p.current,
+        matched,
+        paused: session.paused
+      })
+    }
   }
 }
 
@@ -180,7 +174,7 @@ async function rescanRound(session: ActiveSession): Promise<void> {
   const memoryBySig = await lookupMemory(signatures, session)
 
   const plan = buildFillPlan(fresh, session.profile, session.entries, { memoryBySig })
-  await executeFills(plan.items)
+  await executeFills(plan.items, progressCtx(session, plan.items.length))
 
   for (const item of plan.items) {
     session.executed.push(item)
@@ -284,7 +278,9 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
     resolved: new Set(),
     reportItems: [],
     report: null,
-    coveredIds: new Set()
+    coveredIds: new Set(),
+    paused: false,
+    progress: { done: 0, total: 0 }
   }
   setActiveSession(session)
 
@@ -295,7 +291,8 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
 
   emit(sessionId, "filling")
   const plan = buildFillPlan(scanned, profile, entries, { memoryBySig })
-  await executeFills(plan.items)
+  renderProgressPanel({ done: 0, total: 0, matched: plan.items.length })
+  await executeFills(plan.items, progressCtx(session, plan.items.length))
 
   for (const item of plan.items) {
     session.executed.push(item)

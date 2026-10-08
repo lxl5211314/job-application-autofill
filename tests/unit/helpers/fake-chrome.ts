@@ -10,6 +10,8 @@ export interface FakeChromeHandle {
   data: Record<string, unknown>
   /** chrome.runtime.onMessage 捕获的监听器（供 background 路由测试） */
   listeners: FakeMessageListener[]
+  /** chrome.runtime.onConnect 捕获的监听器（T071 进度端口） */
+  connectListeners: Array<(port: unknown) => void>
   uninstall: () => void
 }
 
@@ -47,12 +49,18 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
   }
 
   const listeners: FakeMessageListener[] = []
+  const connectListeners: Array<(port: unknown) => void> = []
   const fake = {
     storage: { local },
     runtime: {
       onMessage: {
         addListener: (fn: FakeMessageListener): void => {
           listeners.push(fn)
+        }
+      },
+      onConnect: {
+        addListener: (fn: (port: unknown) => void): void => {
+          connectListeners.push(fn)
         }
       }
     }
@@ -66,6 +74,7 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
   return {
     data,
     listeners,
+    connectListeners,
     uninstall: () => {
       Reflect.deleteProperty(globalThis, "chrome")
     }
