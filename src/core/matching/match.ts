@@ -444,6 +444,10 @@ export function buildFillPlan(
   const items: FillPlanItem[] = []
   const covered = new Set<string>()
   const memoryBySig = options.memoryBySig
+  /** T073: 非表格经历行（div 卡片/行容器，无 tr 可依）——同一语义字段
+   *  （如 entry.education.title）的出现次序即行号：每行同名字段出现一次，
+   *  文档顺序与行顺序一致；表格行（rowIndex≥0）仍走 tr 索引不受影响 */
+  const divOcc = new Map<string, number>()
 
   for (const field of scanned) {
     // T065：只读但可驱动（日历/弹层下拉）→ 走正常标量流程，
@@ -496,7 +500,13 @@ export function buildFillPlan(
       const parts = match.semanticFieldId.split(".")
       const kind = (parts[1] ?? "education") as EntryKind
       const prop = (parts[2] ?? "title") as keyof ExperienceEntry
-      const rowIndex = field.rowIndex
+      let rowIndex = field.rowIndex
+      if (rowIndex < 0) {
+        // T073: div 型重复行归组（见 divOcc 注释）
+        const occ = divOcc.get(match.semanticFieldId) ?? 0
+        divOcc.set(match.semanticFieldId, occ + 1)
+        rowIndex = occ
+      }
       const list = entriesOfKind(entries, kind)
       const entry = rowIndex >= 0 ? list[rowIndex] : undefined
       match.reason = match.reason ?? ""

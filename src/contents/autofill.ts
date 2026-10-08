@@ -3,6 +3,7 @@
 // 主窗口 3s + 补扫 ≤5s，research R5/R8）→ FillReport（掩码）→ report:save → 结果面板
 
 import { executeFills, type FillProgress, type ExecuteContext } from "../core/filling/execute"
+import { expandEntryRows } from "../core/filling/expand"
 import { setActiveSession, type ActiveSession } from "../core/filling/session-state"
 import { maskValue } from "../core/model/mask"
 import type {
@@ -164,7 +165,8 @@ function newFieldsOnly(fields: ScannedField[]): ScannedField[] {
 }
 
 async function rescanRound(session: ActiveSession): Promise<void> {
-  const fresh = newFieldsOnly([...scanDocument(document), ...scanReadonlyFields(document)])
+  const all = [...scanDocument(document), ...scanReadonlyFields(document)]
+  const fresh = newFieldsOnly(all)
   if (fresh.length === 0) return
   markProcessed(fresh)
 
@@ -173,10 +175,15 @@ async function rescanRound(session: ActiveSession): Promise<void> {
     .map((f) => f.signature)
   const memoryBySig = await lookupMemory(signatures, session)
 
-  const plan = buildFillPlan(fresh, session.profile, session.entries, { memoryBySig })
-  await executeFills(plan.items, progressCtx(session, plan.items.length))
+  // T074: 计划基于全量扫描归组（div/表格行号都是整页位置），但只执行
+  // 「新出现元素」的条目——避免重复填写已处理字段，同时让 T073/T074
+  // 展开的新行拿到正确的全局行号（按新鲜子集归组会从 0 重数）
+  const plan = buildFillPlan(all, session.profile, session.entries, { memoryBySig })
+  const freshSet = new Set<Element>(fresh.map((f) => f.element))
+  const items = plan.items.filter((i) => freshSet.has(i.match.field.element))
+  await executeFills(items, progressCtx(session, items.length))
 
-  for (const item of plan.items) {
+  for (const item of items) {
     session.executed.push(item)
     const id = item.match.semanticFieldId
     // 仅标量字段计入 notFound 覆盖集（entry.* 不参与 FR-014）
@@ -309,7 +316,19 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
   // 补扫窗口（≤8s）结束后用 finalize 结果覆盖刷新（createPanel 复用同一宿主）
   renderResultPanel(finalize(session))
 
+  // T071(观察者先启动)：展开期间的 DOM 变更走补扫；展开失败不阻塞会话
   const waitForObserver = observeRescan(session, startedAt)
+  try {
+    await expandEntryRows({
+      doc: document,
+      profile: session.profile,
+      entries: session.entries,
+      memoryBySig: session.memoryBySig,
+      isPaused: () => session.paused
+    })
+  } catch {
+    // 展开属增强能力：按钮找不到/点击无增长/异常都静默降级，不影响填写会话
+  }
   await waitForObserver()
 
   const report = finalize(session)

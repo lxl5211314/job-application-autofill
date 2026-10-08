@@ -63,6 +63,8 @@
 - 首屏反馈 ≤3 秒（SC-006）；结果按 `filled / needs_confirm / missing_in_profile / not_found / manual_required` 分类（FR-014）
 - 手机号/邮箱等敏感值**掩码显示**（data-model §4）
 - 页面已预填且与资料库不一致 → **不覆盖**，转确认（FR-017）
+- **实时反馈（P2）**：页面右下角进度条（已填 k/N + 当前字段）、填写处滚动跟随 + 黄色高亮 1.5s、「暂停（剩余转需人工）」按钮；popup 四步清单（扫描→匹配→填写→完成）经 `autofill-progress` 端口实时更新，不自动关窗
+- **多段经历自动展开（P3）**：资料条数多于页面可见行时自动点该节「+添加」按钮展开新行再按行号填入（词表+黑名单+节容器唯一归属+每类≤5次+无增长即停；`保存/提交/删除` 永不触碰）
 
 ### 4. 页内确认面板（Shadow DOM）
 
@@ -104,7 +106,7 @@ npm install          # postinstall 自动复制 pdf.js worker → resources/pdf.
 npm run dev          # 开发构建（热更新）→ build/chrome-mv3-dev
 npm run build        # 生产构建 → build/chrome-mv3-prod
 npm run package      # 打包 zip → build/chrome-mv3-prod.zip
- npm test             # Vitest 单元测试（jsdom，172 项）
+ npm test             # Vitest 单元测试（jsdom，183 项）
 npm run test:watch   # 监听模式
 npm run lint         # ESLint（含 scripts/*.mjs）
 npx tsc --noEmit     # TypeScript 严格类型检查
@@ -253,7 +255,7 @@ npx tsc --noEmit  &&  npm run lint  &&  npm test  &&  npm run build
 
 ## 测试与验收
 
-### 单元测试（Vitest，172 项 / 12 文件）
+### 单元测试（Vitest，183 项 / 13 文件）
 
 | 文件 | 覆盖 |
 |---|---|
@@ -344,7 +346,7 @@ scripts/
   copy-pdf-worker.mjs      # postinstall 复制 pdf.js worker
 specs/                     # spec-kit 规格（spec/data-model/contracts/tasks/quickstart）
 docs/usage.md              # 使用指南（安装/建档/填写/确认/记忆/排查）
- tests/unit/                # Vitest 单测（172 项）
+ tests/unit/                # Vitest 单测（183 项）
 tests/fixtures/            # 合成夹具（HTML 表单页、PDF/txt 简历）
 ```
 
