@@ -200,6 +200,9 @@
 - [x] T074 多段经历自动展开 in `src/core/filling/expand.ts` + `autofill.ts`: `findAddButtons`（`+添加/新增/增加/新建/加一行` 严格词表 + `保存/提交/删除/上一步…` 黑名单 + 可见性 + 排除扩展面板）；`expandEntryRows`——先算每类 `资料条目数−页面行数`（经 buildFillPlan 全量计划），按钮按**节容器唯一归属**认领（自 button 父链向上找最近含经历字段的祖先，容器含多类 → 歧义不点），pressLike 点击（mousedown/up/click 三连兼容框架），每次点击轮询等行数增长（≤10 次轮询、按次数封顶不死等），无增长即停；每类 ≤5 次；`isPaused` 已暂停不展开；观察者先启动、展开期变更走 FR-016 补扫；**rescanRound 改为全量扫描出计划、只执行新出现元素的条目**（行号按整页归组，新行拿全局行号，且不重复填写旧字段）
 - [x] T075 P3 测试: `tests/unit/expand.test.ts` 11 用例（div 行归组 fill/超出行 missing/添加词表黑名单/主流程点 1 次展开+条目 2 可填/资料不超不点/无增长有界停止≤11 轮询/每类封顶 5 次/歧义容器不点/分节归属只扩教育不碰满员实习节/暂停不点/无按钮静默）；全量 **183 tests / 13 files** + tsc/lint 0 + build DONE + e2e 54/54 exit 0
 - [x] T076 P3 文档: semantic-fields.md 行号来源与「自动展开」契约更新（取代历史"绝不点添加"决策，含安全边界与 FR-018 关系）、usage.md「多段经历自动展开」小节、README 计数 183/13
+- [x] T077 高置信直填 in `src/core/matching/match.ts`: `FieldMatch.exact` 标记别名精确命中（label 与别名逐一相等）；标量计划填闸从 `confidence === "high"` 扩为 `high || exact === true`——gray 但别名精确命中（仅控件形态不吻合，如 textarea「学校」/radio「工作地点」）属 FR-013 的「高置信度匹配」→ 直填；选项措辞/预填冲突/资料待核对/歧义各分支仍在闸前拦截（exact 也无法越过）；部分包含（非 exact）与仅 name/id 弱信号维持原行为（confirm/skip）
+- [x] T078 未填标红 in `src/core/ui/highlight.ts` + `autofill.ts` + `confirm-panel.ts`: `markUnfilled/unmarkUnfilled`（WeakMap 保存原行内 outline/offset、幂等，标红前清掉未决黄色高亮计时防 1.5s 恢复回调抹红）+ `shouldMarkUnfilled`（confirm/missing 必标；manual 仅「只读/控件交互失败/已暂停」标红，非填写区黑名单刻意跳过不标；fill/skip 不标）+ `markUnfilledItems(session.executed)` 在首屏结果与补扫结束各标一次；确认面板点选成功在 `markResolved` 中 `unmarkUnfilled` 撤销（跳过则保留红标）
+- [x] T079 P4 测试与验证: `confirm-routing.test.ts` T077 块 4 用例（textarea 精确命中直填/radio 等价直填/exact 但选项无等价仍确认/部分包含仍确认）+ `highlight.test.ts` T078 块 11 用例（标红恢复/保留原值/幂等/黄框计时不清则红被抹回归/红后高亮恢复仍是红/SVG 与未标记无操作/过滤规则 4 项/批量标红）；顺手修 `expand.test.ts` 未用 `vi` 导入；全量 **198 tests / 13 files** + tsc/lint 0 + build DONE + e2e 54/54 exit 0
 
 ---
 

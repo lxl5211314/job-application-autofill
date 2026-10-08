@@ -10,6 +10,7 @@ import { sendToBackground } from "../messaging"
 import { maskValue } from "../model/mask"
 import type { FillItemStatus, FillReportItem } from "../model/types"
 import { el } from "./dom"
+import { unmarkUnfilled } from "./highlight"
 import { createPanel } from "./panel-host"
 import { renderResultPanel } from "./result-panel"
 
@@ -61,6 +62,8 @@ function markResolved(session: ActiveSession, item: FillPlanItem, value: string)
     delete reportItem.reason
   }
   session.resolved.add(item)
+  // T078(P4)：该字段已由用户点选填入 → 撤销页面上的未填标红
+  unmarkUnfilled(item.match.field.element)
   // T035: 同步刷新结果面板（FR-014 状态即时可见）
   if (session.report) renderResultPanel(session.report)
 }

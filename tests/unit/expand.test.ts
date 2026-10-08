@@ -1,7 +1,7 @@
 // T073/T074: div 型经历行按出现次序归组 + 多段经历自动展开（点「添加」按钮）
 // 安全边界：黑名单不点 / 歧义容器不点 / 每类≤5 次 / 无增长即停 / 暂停不展开
 
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 
 import { expandEntryRows, findAddButtons } from "../../src/core/filling/expand"
 import { buildFillPlan } from "../../src/core/matching/match"

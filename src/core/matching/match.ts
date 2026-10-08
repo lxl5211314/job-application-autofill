@@ -29,6 +29,9 @@ export interface FieldMatch {
   conflict: boolean
   /** P1-3：仅 name/id 弱信号命中（词边界+控件过滤后仍存疑）→ 不确认不填写 */
   weak?: boolean
+  /** T077：别名精确命中（label 与别名逐一相等）——语义字段已确定，
+   *  gray 档下据此高置信直填（控件形态不吻合不改变「填什么」） */
+  exact?: boolean
   reason?: string
 }
 
@@ -285,13 +288,14 @@ export function matchField(field: ScannedField, memory?: FieldMemory | null): Fi
   if (top.exact) {
     const controlOk = controlMatches(id, field.controlKind)
     if (controlOk) {
-      return { ...base, semanticFieldId: id, confidence: "high", candidates }
+      return { ...base, semanticFieldId: id, confidence: "high", candidates, exact: true }
     }
     return {
       ...base,
       semanticFieldId: id,
       confidence: "gray",
       candidates,
+      exact: true,
       reason: "别名命中但控件类型不吻合"
     }
   }
@@ -624,7 +628,10 @@ export function buildFillPlan(
       }
     }
 
-    if (match.confidence === "high") {
+    // T077 高置信直填：high 直接填；gray 但别名精确命中（仅控件形态不吻合）同样
+    // 属 FR-013 的「高置信度匹配」——填什么已由别名表确定，控件形状不改变语义。
+    // 选项措辞/预填冲突/资料待核对/歧义已在上方各分支拦截，仍走确认
+    if (match.confidence === "high" || match.exact === true) {
       items.push({ match, action: "fill", value })
     } else {
       items.push({

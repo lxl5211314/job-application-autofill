@@ -157,3 +157,71 @@ describe("面板候选值来源", () => {
     expect(unknown).toBeUndefined()
   })
 })
+
+describe("T077 高置信直填：别名精确命中（仅控件形态不吻合）→ fill", () => {
+  it("textarea「学校」精确命中（词表 controls 仅 text）→ gray + exact，计划直填", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="s1">学校</label><textarea id="s1" name="sch"></textarea></form>`,
+      "text/html"
+    )
+    const field = scanDocument(doc)[0] as ScannedField
+    const match = matchField(field)
+    expect(match.semanticFieldId).toBe("basic.school")
+    expect(match.confidence).toBe("gray")
+    expect(match.exact).toBe(true)
+
+    const plan = buildFillPlan([field], profile, entries)
+    expect(plan.items[0]?.action).toBe("fill")
+    expect(plan.items[0]?.value).toBe("清华大学")
+  })
+
+  it("radio「工作地点」精确命中（词表 controls 无 radio）+ 选项等价 → 直填", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><fieldset><legend>工作地点</legend>
+        <label><input type="radio" name="city" value="北京" />北京</label>
+        <label><input type="radio" name="city" value="上海" />上海</label>
+      </fieldset></form>`,
+      "text/html"
+    )
+    const field = scanDocument(doc)[0] as ScannedField
+    const match = matchField(field)
+    expect(match.semanticFieldId).toBe("intent.city")
+    expect(match.confidence).toBe("gray")
+    expect(match.exact).toBe(true)
+
+    const plan = buildFillPlan([field], profile, entries)
+    expect(plan.items[0]?.action).toBe("fill")
+    expect(plan.items[0]?.value).toBe("北京")
+  })
+
+  it("exact 但选项措辞无等价项 → 仍先走确认（FR-013 拦截优先于直填）", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="deg9">最高学历</label>
+        <select id="deg9" name="degree">
+          <option value="">请选择</option>
+          <option value="1">大学专科</option>
+        </select></form>`,
+      "text/html"
+    )
+    const field = scanDocument(doc)[0] as ScannedField
+    expect(matchField(field).exact).toBe(true) // 别名精确命中
+    const plan = buildFillPlan([field], profile, entries)
+    expect(plan.items[0]?.action).toBe("confirm")
+    expect(plan.items[0]?.reason).toContain("选项措辞")
+  })
+
+  it("label 仅部分包含（非精确）→ 不直填，仍进确认", () => {
+    const doc = new DOMParser().parseFromString(
+      `<form><label for="sl">学校简介</label><input id="sl" /></form>`,
+      "text/html"
+    )
+    const field = scanDocument(doc)[0] as ScannedField
+    const match = matchField(field)
+    expect(match.semanticFieldId).toBe("basic.school")
+    expect(match.exact).not.toBe(true)
+
+    const plan = buildFillPlan([field], profile, entries)
+    expect(plan.items[0]?.action).toBe("confirm")
+    expect(plan.items[0]?.reason).toContain("部分包含")
+  })
+})

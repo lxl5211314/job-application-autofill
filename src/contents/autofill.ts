@@ -17,6 +17,7 @@ import { scanDocument, scanReadonlyFields, type ScannedField } from "../core/mat
 import { semanticFieldLabel } from "../core/matching/vocabulary"
 import { sendToBackground, ok, type Request, type Response } from "../core/messaging"
 import { showConfirmPanel } from "../core/ui/confirm-panel"
+import { markUnfilledItems } from "../core/ui/highlight"
 import { renderProgressPanel, renderResultPanel } from "../core/ui/result-panel"
 
 export const config = {
@@ -315,6 +316,8 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
   // T053（SC-006）：首屏反馈即时呈现——scan/fill 全本地毫秒级完成即出结果清单，
   // 补扫窗口（≤8s）结束后用 finalize 结果覆盖刷新（createPanel 复用同一宿主）
   renderResultPanel(finalize(session))
+  // T078(P4)：未填字段立即在页面标红（幂等，补扫后会再标一次新条目）
+  markUnfilledItems(session.executed)
 
   // T071(观察者先启动)：展开期间的 DOM 变更走补扫；展开失败不阻塞会话
   const waitForObserver = observeRescan(session, startedAt)
@@ -338,6 +341,8 @@ async function runSession(sessionId: string, startedAt: number): Promise<void> {
   await sendToBackground("report:save", report)
   emit(sessionId, "done", report)
   renderResultPanel(report)
+  // T078(P4)：补扫产生的新未填条目一并标红（已标元素幂等跳过）
+  markUnfilledItems(session.executed)
   // T034: 有低置信/冲突/歧义条目 → 弹确认面板（FR-013）
   showConfirmPanel(session)
 }
